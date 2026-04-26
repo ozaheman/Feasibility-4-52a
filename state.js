@@ -21,12 +21,14 @@ export function rehydrateProgram(plainProgram, masterProgram) {
 
 const _state = {
     canvas: null,
-    overlayCanvas:null,
-    overlayCtx:null,
+    overlayCanvas: null,
+    overlayCtx: null,
     currentMode: null,
     scale: { pixels: 0, meters: 0, ratio: 0 },
     currentLevel: 'Typical_Floor',
     allLayersVisible: false,
+    levelVisibilityMode: 'isolate', // 'isolate', 'all', 'custom'
+    customLevelVisibility: {}, 
     levels: JSON.parse(JSON.stringify(LEVEL_DEFINITIONS)),
     serviceBlocks: [],
     wingCounter: 0,
@@ -43,9 +45,10 @@ const _state = {
     projectType: 'Residential',
     currentProgram: rehydrateProgram(JSON.parse(JSON.stringify(RESIDENTIAL_PROGRAM)), RESIDENTIAL_PROGRAM),
     selectedPlotEdges: [],
-    edgeHighlightGroup: null, 
+    edgeHighlightGroup: null,
     isFootprint: false,
     dxfOverlayGroup: null,
+    currentDxfLayer: null,
     scaleLine: null,
     scaleStart: null,
     // New state properties for zip functionality
@@ -53,15 +56,21 @@ const _state = {
     originalDxfContent: null,
     // NEW: for action recorder
     actionHistory: [],
-     // NEW: For editable area statement
+    // NEW: For editable area statement
     manualAreaOverrides: {},
     // NEW: For live drawing feedback
     lastMousePointer: { x: 0, y: 0 },
     liveDimensionLine: null,
     // NEW: Store results from the market rate analysis
-    lastMarketRates: null, 
-     // NEW: To hold data from an imported market rates XML file
+    lastMarketRates: null,
+    // NEW: To hold data from an imported market rates XML file
     offlineMarketRates: null,
+    // NEW: PDF Import & Alignment
+    pdfDocument: null,
+    pdfBackgroundImage: null,
+    currentPdfPage: 1,
+    pendingGeometryZipFile: null,
+    dxfLayers: {}, // NEW: Store DXF layers metadata and objects
 };
 
 export const state = _state;
@@ -81,6 +90,7 @@ export function setCurrentLevel(levelName) {
 }
 export function toggleAllLayersVisibility() {
     _state.allLayersVisible = !_state.allLayersVisible;
+    _state.levelVisibilityMode = _state.allLayersVisible ? 'all' : 'isolate';
 }
 
 export function resetState(keepObjects = false) {
@@ -91,6 +101,8 @@ export function resetState(keepObjects = false) {
         scale: { pixels: 0, meters: 0, ratio: 0 },
         currentLevel: 'Typical_Floor',
         allLayersVisible: false,
+        levelVisibilityMode: 'isolate',
+        customLevelVisibility: {},
         levels: JSON.parse(JSON.stringify(LEVEL_DEFINITIONS)),
         serviceBlocks: [],
         parkingRows: [],
@@ -108,22 +120,28 @@ export function resetState(keepObjects = false) {
         selectedPlotEdges: [],
         edgeHighlightGroup: null,
         dxfOverlayGroup: null,
+        currentDxfLayer: null,
         originalPlanFile: null,
         originalDxfContent: null,
         // NEW: Reset action history
         actionHistory: [],
-         // NEW: Reset manual overrides
+        // NEW: Reset manual overrides
         manualAreaOverrides: {},
         lastMousePointer: { x: 0, y: 0 },
         liveDimensionLine: null,
         lastMarketRates: null, // Reset market rates
-         offlineMarketRates: null, // Reset offline data
+        offlineMarketRates: null, // Reset offline data
+        pdfDocument: null,
+        pdfBackgroundImage: null,
+        currentPdfPage: 1,
+        pendingGeometryZipFile: null,
+        dxfLayers: {}, // NEW: Reset DXF layers
     });
     if (!keepObjects) {
-        if(_state.canvas) {
+        if (_state.canvas) {
             _state.canvas.clear();
-             _state.canvas.setBackgroundImage(null, _state.canvas.renderAll.bind(_state.canvas));
-             _state.canvas.setWidth(800).setHeight(600);
+            _state.canvas.setBackgroundImage(null, _state.canvas.renderAll.bind(_state.canvas));
+            _state.canvas.setWidth(800).setHeight(600);
         }
     }
 }

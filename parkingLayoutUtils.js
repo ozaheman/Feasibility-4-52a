@@ -41,7 +41,7 @@ export function createParkingGeometry(lineLengthMeters, parkingType, rowType, to
     const createBaysForSide = () => {
         let stallAngleDeg = 90, stallL = BAY_L;
         if (parkingType === 'parallel') {
-            stallAngleDeg = 0;
+            stallAngleDeg = 90;
             stallL = BAY_W;
         } else {
             if (parkingType === 'angle60') stallAngleDeg = 60;
@@ -147,6 +147,8 @@ export function generateLinearParking(startPt, endPt) {
 
 export function regenerateParkingInGroup(group, scaleRatio) {
     const params = group.parkingParams;
+    const oldCenter = group.getCenterPoint();
+    const oldAngle = group.angle;
     const newWidthPixels = group.getScaledWidth();
     const newLineLengthMeters = newWidthPixels * scaleRatio;
     const newBayCount = calculateBaysForLength(newLineLengthMeters, params.parkingType) * (params.rowType === 'double' ? 2 : 1);
@@ -170,6 +172,13 @@ export function regenerateParkingInGroup(group, scaleRatio) {
     // Add centered objects
     newObjects.forEach(obj => group.addWithUpdate(obj));
 
-    group.set({ width: newWidthPixels, scaleX: 1, parkingCount: newBayCount });
+    group.set({ 
+        width: newWidthPixels, 
+        scaleX: 1, 
+        parkingCount: newBayCount,
+        left: oldCenter.x,
+        top: oldCenter.y,
+        angle: oldAngle
+    });
     group.setCoords();
 }

@@ -34,15 +34,16 @@ window.scaleReady=null;
 window.currentlyEditingUnitKey = null;
 window.tempUnitData= null;
 window.inputs = {};
-import { initCanvas } from './canvasController.js';
-import { initUI,updateUI  } from './uiController.js';
+import { initCanvas, getCanvas } from './canvasController.js';
+import { initUI, updateUI } from './uiController.js';
 import { initDrawingTools } from './drawingTools.js';
 import { init3D } from './viewer3d.js';
 import { setupEventListeners } from './eventHandlers.js';
 import { resetState, state } from './state.js';
+import { loadFromAutosave, autosaveToLocalStorage } from './io.js';
 
 
-    document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // --- MODIFICATION START: Set the pdf.js worker source to match the library version. ---
     if (window.pdfjsLib) {
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js`;
@@ -52,6 +53,28 @@ import { resetState, state } from './state.js';
     init3D();
     initUI();
     setupEventListeners();
-resetState();
-updateUI();
+    resetState();
+
+    const canvas = getCanvas();
+    const loaded = await loadFromAutosave(canvas);
+    if (!loaded) {
+        updateUI();
+    }
+
+    // Set up periodic autosave every 10 seconds for crash recovery
+    setInterval(() => {
+        autosaveToLocalStorage();
+    }, 10000);
+
+    // Set up rolling autosave every 5 minutes (5 iterations max)
+    setInterval(() => {
+        if (window.rollingAutosave) {
+            window.rollingAutosave();
+        } else {
+            // Import dynamically if needed or just rely on the imported version if we add it
+            import('./io.js').then(module => {
+                if (module.rollingAutosave) module.rollingAutosave();
+            });
+        }
+    }, 300000);
 });

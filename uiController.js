@@ -1,21 +1,160 @@
 
-
-//--- START OF FILE uiController.js ---
-
-
-
-import { LEVEL_ORDER, LEVEL_DEFINITIONS, PREDEFINED_COMPOSITE_BLOCKS ,AREA_STATEMENT_DATA, HOTEL_REQUIREMENTS, PREDEFINED_BLOCKS, BLOCK_CATEGORY_COLORS, DUBAI_LOCATIONS, MARKET_RATE_PROPERTY_TYPES,DUBAI_LAND_RATES  } from './config.js';
-import { f,fInt ,getPolygonProperties} from './utils.js';
+import { LEVEL_ORDER, LEVEL_DEFINITIONS, PREDEFINED_COMPOSITE_BLOCKS, AREA_STATEMENT_DATA, HOTEL_REQUIREMENTS, PREDEFINED_BLOCKS, BLOCK_CATEGORY_COLORS, DUBAI_LOCATIONS, MARKET_RATE_PROPERTY_TYPES, DUBAI_LAND_RATES } from './config.js';
+import { f, fInt, getPolygonProperties } from './utils.js';
 import { resetState, state } from './state.js';
 import { getCanvas } from './canvasController.js';
 import { enterMode, handleCalculate, exitAllModes } from './eventHandlers.js';
 import { captureLevelScreenshot } from './reportGenerator.js';
-import { layoutFlatsOnPolygon } from './apartmentLayout.js'; // NEW import
-import { exportMarketRatesXML, importMarketRatesXML } from './io.js';
-  
+import { layoutFlatsOnPolygon } from './apartmentLayout.js';
+import { exportMarketRatesXML, importMarketRatesXML, updateDxfLayerProperty, getSavedSessionNames } from './io.js';
+
+import { recordAction } from './actionRecorder.js';
+export function renderDxfLayersSidebar() {
+    const container = document.getElementById('dxf-layers-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!state.dxfLayers || Object.keys(state.dxfLayers).length === 0) {
+        container.innerHTML = '<p style="font-size:0.85em; color:#888; text-align:center; margin: 5px 0;">No layers detected</p>';
+        return;
+    }
+
+    Object.values(state.dxfLayers).forEach(layer => {
+        const item = document.createElement('div');
+        item.className = 'dxf-layer-item' + (state.currentDxfLayer === layer.name ? ' active' : '');
+        item.style.cursor = 'pointer';
+        item.style.padding = '5px';
+        item.style.borderRadius = '4px';
+        item.style.marginBottom = '2px';
+        item.style.display = 'grid';
+        item.style.gridTemplateColumns = '24px 34px 50px 1fr';
+        item.style.gap = '5px';
+        item.style.alignItems = 'center';
+
+        if (state.currentDxfLayer === layer.name) {
+            item.style.backgroundColor = '#e3f2fd';
+            item.style.border = '1px solid #2196f3';
+        }
+
+        item.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                state.currentDxfLayer = layer.name;
+                renderDxfLayersSidebar();
+            }
+        });
+
+        // Visibility
+        const visCheck = document.createElement('input');
+        visCheck.type = 'checkbox';
+        visCheck.checked = layer.visible;
+        visCheck.title = 'Toggle Visibility';
+        visCheck.style.margin = '0';
+        visCheck.style.width = 'auto';
+        visCheck.addEventListener('change', e => {
+            updateDxfLayerProperty(layer.name, 'visible', e.target.checked);
+            state.currentDxfLayer = layer.name;
+            renderDxfLayersSidebar();
+        });
+
+        // Color
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = layer.color;
+        colorInput.title = 'Layer Color';
+        colorInput.style.padding = '0';
+        colorInput.style.height = '24px';
+        colorInput.style.width = '100%';
+        colorInput.addEventListener('input', e => updateDxfLayerProperty(layer.name, 'color', e.target.value));
+
+        // Thickness
+        const thickInput = document.createElement('input');
+        thickInput.type = 'number';
+        thickInput.value = layer.thickness;
+        thickInput.step = '0.1';
+        thickInput.min = '0.1';
+        thickInput.title = 'Line Thickness';
+        thickInput.style.width = '100%';
+        thickInput.addEventListener('input', e => updateDxfLayerProperty(layer.name, 'thickness', e.target.value));
+
+        // Name
+        const nameLabel = document.createElement('div');
+        nameLabel.textContent = layer.name;
+        nameLabel.title = layer.name;
+        nameLabel.style.overflow = 'hidden';
+        nameLabel.style.textOverflow = 'ellipsis';
+        nameLabel.style.whiteSpace = 'nowrap';
+        nameLabel.style.fontSize = '0.85em';
+
+        item.appendChild(visCheck);
+        item.appendChild(colorInput);
+        item.appendChild(thickInput);
+        item.appendChild(nameLabel);
+        container.appendChild(item);
+    });
+}
+
+export function openDxfLayerSelector() {
+    const modal = document.getElementById('dxf-layer-selector-modal');
+    const container = document.getElementById('dxf-layer-selection-list');
+    if (!modal || !container) return;
+
+    container.innerHTML = '';
+    if (!state.dxfLayers || Object.keys(state.dxfLayers).length === 0) {
+        container.innerHTML = '<p>No layers detected.</p>';
+        return;
+    }
+
+    Object.values(state.dxfLayers).forEach(layer => {
+        const row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '10px';
+        row.style.padding = '5px';
+        row.style.borderBottom = '1px solid #eee';
+        row.style.cursor = 'pointer';
+
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.className = 'dxf-layer-select-checkbox';
+        check.dataset.layer = layer.name;
+        check.checked = layer.visible;
+        check.style.width = 'auto';
+
+        const name = document.createElement('span');
+        name.textContent = layer.name;
+        name.style.fontSize = '0.9em';
+
+        row.appendChild(check);
+        row.appendChild(name);
+        container.appendChild(row);
+    });
+
+    modal.style.display = 'flex';
+}
+
+export function closeDxfLayerSelector() {
+    const modal = document.getElementById('dxf-layer-selector-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+export function applyDxfLayerVisibilityFromModal() {
+    const checkboxes = document.querySelectorAll('.dxf-layer-select-checkbox');
+    checkboxes.forEach(cb => {
+        const layerName = cb.dataset.layer;
+        updateDxfLayerProperty(layerName, 'visible', cb.checked);
+    });
+    renderDxfLayersSidebar();
+    closeDxfLayerSelector();
+}
+
+export function setAllDxfLayerCheckboxes(checked) {
+    const checkboxes = document.querySelectorAll('.dxf-layer-select-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
 export function initUI() {
     const levelSelector = document.getElementById('level-selector');
-    levelSelector.innerHTML = ''; 
+    levelSelector.innerHTML = '';
     LEVEL_ORDER.forEach(levelKey => {
         const btn = document.createElement('button');
         btn.dataset.level = levelKey;
@@ -29,21 +168,22 @@ export function initUI() {
     updateLevelCounts();
     updateProgramUI();
     updateLevelFootprintInfo();
-     // NEW: Initialize the market rate UI module
     initMarketRatesUI();
-    initCollapsibleSections(); // NEW: Initialize toggles
-     // NEW: Populate category dropdown
+    initCollapsibleSections();
+    initRatioAreaLinkage();
+    initGFADistribution();
+    initPdfAndAlignmentTools();
+
     const categorySelect = document.getElementById('block-category-select');
     categorySelect.innerHTML = Object.keys(BLOCK_CATEGORY_COLORS).map(cat => `<option value="${cat}">${cat.toUpperCase()}</option>`).join('');
-    // Add event listener for DEWA TCL calculation
+
     const tclInput = document.getElementById('cost-tcl-kw');
     tclInput.addEventListener('input', calculateDewaCharges);
-    // Initial calculation on load
-    calculateDewaCharges(); 
-     // Add event listener for Land Cost Rate button
+    calculateDewaCharges();
+
     const getLandRateBtn = document.getElementById('get-land-rate-btn');
     getLandRateBtn.addEventListener('click', getOnlineLandRate);
-    // --- MODIFICATION START: Dynamically inject retail revenue toggles ---
+
     const buyingToggleLabel = document.getElementById('toggle-revenue-buying')?.parentElement;
     if (buyingToggleLabel) {
         const retailBuyingToggle = document.createElement('label');
@@ -67,63 +207,96 @@ export function initUI() {
         officeRentingToggle.innerHTML = `<input type="checkbox" class="param-input" id="toggle-revenue-renting-office" checked> ... include Office revenue`;
         retailRentingToggle.insertAdjacentElement('afterend', officeRentingToggle);
     }
-    // --- MODIFICATION END ---
 }
+
 export function updateUI() {
     const canvas = getCanvas();
     const scaleSet = state.scale.ratio > 0;
     const hasPlot = !!state.plotPolygon;
-    
+
     const hasTypicalFootprint = state.levels['Typical_Floor']?.objects.length > 0;
     const hasHotelFootprint = state.levels['Hotel']?.objects.length > 0;
     const hasWarehouseFootprint = state.levels['Warehouse']?.objects.length > 0;
     const hasLabourCampFootprint = state.levels['LabourCamp']?.objects.length > 0;
-    //const hasCalculableFootprint = hasTypicalFootprint || hasHotelFootprint || hasWarehouseFootprint || hasLabourCampFootprint;
     const hasAnyFootprint = Object.values(state.levels).some(l => l.objects.length > 0);
-     const hasSchoolFootprint = state.levels['School']?.objects.length > 0;
+    const hasSchoolFootprint = state.levels['School']?.objects.length > 0;
     const hasCalculableFootprint = hasTypicalFootprint || hasHotelFootprint || hasWarehouseFootprint || hasLabourCampFootprint || hasSchoolFootprint;
     const hasSelection = !!state.canvas.getActiveObject();
-    const isEditingFootprint = state.currentMode === 'editingFootprint';
-    const isFootprintSelected = hasSelection && canvas.getActiveObject()?.isFootprint;
     const hasFootprintOnCurrentLevel = state.levels[state.currentLevel]?.objects.some(o => o.isFootprint);
 
+    // New logic for plot editing buttons
+    const isEditingPlot = state.currentMode === 'editingPlot';
+    document.getElementById('edit-plot-btn').style.display = hasPlot && !isEditingPlot ? 'block' : 'none';
+    document.getElementById('confirm-plot-edit-btn').style.display = isEditingPlot ? 'block' : 'none';
 
-    document.getElementById('edit-footprint-btn').disabled = !hasFootprintOnCurrentLevel && !isFootprintSelected;
-    document.getElementById('edit-footprint-btn').style.display = isEditingFootprint ? 'none' : 'inline-block';
-    
+    // Logic for level lock button state
+    const currentLevelData = state.levels[state.currentLevel];
+    const lockBtn = document.getElementById('lock-level-btn');
+    if (lockBtn) {
+        if (currentLevelData) {
+            const isLocked = !!currentLevelData.isLocked;
+            lockBtn.textContent = isLocked ? '🔒 Unlock Level Footprints' : '🔓 Lock Level Footprints';
+            lockBtn.classList.toggle('active', isLocked);
+            lockBtn.disabled = !hasFootprintOnCurrentLevel && !isLocked;
+        } else {
+            lockBtn.disabled = true;
+        }
+    }
+
+    // Logic for footprint editing buttons
+    const isEditingFootprint = state.currentMode === 'editingFootprint';
+    const isFootprintSelected = hasSelection && canvas.getActiveObject()?.isFootprint;
+
+    const editFootprintBtn = document.getElementById('edit-footprint-btn');
+    const confirmFootprintBtn = document.getElementById('confirm-footprint-edit-btn');
+
+    if (editFootprintBtn) editFootprintBtn.style.display = isFootprintSelected && !isEditingFootprint ? 'block' : 'none';
+    if (confirmFootprintBtn) confirmFootprintBtn.style.display = isEditingFootprint ? 'block' : 'none';
+
+    // Logic for parking edit buttons
+    const isEditingParking = state.currentMode === 'editingParking';
+    const isParkingSelected = hasSelection && canvas.getActiveObject()?.isParkingRow;
+    const editParkingBtn = document.getElementById('edit-parking-btn');
+    const confirmParkingBtn = document.getElementById('confirm-parking-edit-btn');
+
+    if (editParkingBtn) editParkingBtn.style.display = isParkingSelected && !isEditingParking ? 'block' : 'none';
+    if (confirmParkingBtn) confirmParkingBtn.style.display = isEditingParking ? 'block' : 'none';
+
     document.getElementById('delete-footprint-btn').disabled = !isFootprintSelected;
-    document.getElementById('confirm-footprint-btn').style.display = isEditingFootprint ? 'block' : 'none';
 
+    const canScale = !!state.canvas.backgroundImage || !!state.dxfOverlayGroup || !!state.plotPolygon;
     const setScaleBtn = document.getElementById('set-scale-btn');
     const projectType = document.getElementById('project-type-select').value;
     document.getElementById('hotel-classification-wrapper').style.display = (projectType === 'Hotel') ? 'block' : 'none';
     document.getElementById('labour-camp-settings').style.display = (projectType === 'LabourCamp') ? 'block' : 'none';
-    setScaleBtn.disabled = !state.canvas.backgroundImage;
+
+    setScaleBtn.disabled = !canScale;
     setScaleBtn.classList.toggle('active', state.currentMode === 'scaling');
     setScaleBtn.textContent = state.currentMode === 'scaling' ? 'Cancel Scaling' : 'Set Scale';
-    document.getElementById('scale-distance').disabled = !state.canvas.backgroundImage;
+    document.getElementById('scale-distance').disabled = !canScale;
 
     document.getElementById('draw-plot-btn').disabled = !scaleSet;
     document.getElementById('measure-tool-btn').disabled = !scaleSet;
+    const dxfMeasureBtn = document.getElementById('dxf-measure-btn');
+    if (dxfMeasureBtn) {
+        dxfMeasureBtn.disabled = !state.dxfOverlayGroup;
+    }
     document.getElementById('draw-guide-btn').disabled = !scaleSet;
     document.getElementById('edit-setbacks-btn').disabled = !hasPlot;
 
-    // Updated Footprint Buttons
-    const buttonGrid = document.querySelector('.button-grid'); // You might need a more specific selector
     document.getElementById('draw-building-btn').disabled = !hasPlot;
-    
-    document.getElementById('draw-linear-btn').disabled = !hasPlot; 
+    document.getElementById('draw-linear-btn').disabled = !hasPlot;
     document.getElementById('draw-corridor-btn').disabled = !hasPlot || state.currentLevel !== 'Typical_Floor';
     document.getElementById('corridor-width-input').disabled = !hasPlot || state.currentLevel !== 'Typical_Floor';
-    
+
     document.getElementById('footprint-from-setbacks-btn').disabled = !hasPlot;
     document.getElementById('footprint-from-plot-btn').disabled = !hasPlot;
-    
-    
-   document.getElementById('add-block-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
+
+    document.getElementById('add-block-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
     document.getElementById('place-composite-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
     document.getElementById('draw-parking-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
-     const validParkingLevel = ['Basement', 'Ground_Floor', 'Podium'].includes(state.currentLevel);
+
+    const validParkingLevel = ['Basement', 'Ground_Floor', 'Podium'].includes(state.currentLevel);
     document.getElementById('draw-parking-on-edge-btn').disabled = !scaleSet || !(hasFootprintOnCurrentLevel || (validParkingLevel && hasPlot)) || window.isEditingGroup;
     document.getElementById('draw-bus-bay-btn').disabled = !scaleSet || !hasAnyFootprint;
     document.getElementById('draw-loading-bay-btn').disabled = !scaleSet || !hasAnyFootprint;
@@ -131,14 +304,12 @@ export function updateUI() {
     document.getElementById('calculateBtn').disabled = !hasPlot || !hasCalculableFootprint;
     document.getElementById('generateDetailedReportBtn').disabled = !hasPlot || !hasCalculableFootprint;
     document.getElementById('export-pdf-btn').disabled = !state.lastCalculatedData;
-   document.getElementById('area-statement-btn').disabled = !hasPlot;
+    document.getElementById('area-statement-btn').disabled = !hasPlot;
     document.getElementById('previewLayoutBtn').disabled = !hasTypicalFootprint || !state.lastCalculatedData || state.projectType !== 'Residential';
     document.getElementById('generate3dBtn').disabled = !hasAnyFootprint;
     document.getElementById('exportScadBtn').disabled = !hasAnyFootprint;
-     // NEW: Enable/disable market rate button
     document.getElementById('get-market-rates-btn').disabled = !scaleSet;
-    
-    // Logic for align-core-btn
+
     const coreBlocks = state.serviceBlocks.filter(b => b.blockData && (b.blockData.name.toLowerCase().includes('lift') || b.blockData.role === 'staircase'));
     const levelsWithCores = new Set(coreBlocks.map(b => b.level));
     document.getElementById('align-core-btn').disabled = levelsWithCores.size < 2;
@@ -146,26 +317,36 @@ export function updateUI() {
     document.querySelectorAll('#level-selector button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.level === state.currentLevel);
     });
-document.getElementById('school-settings').style.display = (projectType === 'School') ? 'block' : 'none';
+
+    document.getElementById('school-settings').style.display = (projectType === 'School') ? 'block' : 'none';
     document.getElementById('program-specific-controls').style.display = (projectType === 'Residential' || projectType === 'Hotel') ? 'block' : 'none';
     document.getElementById('selected-object-controls').style.display = (hasSelection) ? 'block' : 'none';
-    document.getElementById('dxf-controls').style.display = state.dxfOverlayGroup ? 'block' : 'none';
+
+    if (state.dxfOverlayGroup) {
+        document.getElementById('dxf-controls').style.display = 'block';
+        renderDxfLayersSidebar();
+    } else {
+        document.getElementById('dxf-controls').style.display = 'none';
+    }
 
     const statusBar = document.getElementById('status-bar');
     if (state.currentMode === 'aligningObject') {
         statusBar.textContent = 'Mode: Align Object. Hover and click on a plot edge or setback line to align.';
+    } else if (state.currentMode === 'editingPlot') {
+        statusBar.textContent = 'Editing Plot Shape. Use handles to move vertices. Click "Confirm Plot Edit" when done.';
     } else if (!state.currentMode) {
         statusBar.textContent = 'Ready.';
     }
-    
+
     document.getElementById('scale-display').textContent = scaleSet ? `Scale: 1m ≈ ${(1 / state.scale.ratio).toFixed(2)}px` : 'Scale not set.';
     document.getElementById('plot-info').innerHTML = hasPlot ? `<b>Plot:</b> Area: ${f(getPolygonProperties(state.plotPolygon).area)} m² | Perim: ${f(getPolygonProperties(state.plotPolygon).perimeter)} m` : '';
-        // NEW: Manage active state for select tool
+
     const selectBtn = document.getElementById('select-tool-btn');
-    if(selectBtn) {
+    if (selectBtn) {
         selectBtn.classList.toggle('active', !state.currentMode);
     }
 }
+
 export function updateLiveApartmentCalc() {
     const container = document.getElementById('dash-wing-details');
     if (state.projectType !== 'Residential' || !state.currentProgram) {
@@ -187,22 +368,22 @@ export function updateLiveApartmentCalc() {
         container.innerHTML = '';
         return;
     }
-const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
+    const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
     let html = '<div class="dash-row header">Live Unit Estimate (per Floor)</div>';
     let totalUnits = 0;
 
     typicalFootprints.forEach((footprint, index) => {
-         const props = getPolygonProperties(footprint);
+        const props = getPolygonProperties(footprint);
         let effectivePerimeter = props.perimeter;
 
         if (footprint.isLinearFootprint) {
-            effectivePerimeter /= 2; // Approximate length from thin polygon's perimeter
+            effectivePerimeter /= 2;
         }
         if (doubleLoaded) {
             effectivePerimeter *= 2;
         }
 
-         const estimatedUnits = Math.floor(effectivePerimeter / avgFrontage);
+        const estimatedUnits = Math.floor(effectivePerimeter / avgFrontage);
         totalUnits += estimatedUnits;
         html += `<div class="wing-row"><span>Wing ${index + 1}:</span> <b>${fInt(estimatedUnits)} units</b></div>`;
     });
@@ -210,39 +391,42 @@ const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
     if (typicalFootprints.length > 1 || doubleLoaded) {
         html += `<div class="wing-total"><span>Total Est. Units:</span> <b>${fInt(totalUnits)} units</b></div>`;
     }
-    
+
     container.innerHTML = html;
 }
+
 export function updateLevelFootprintInfo() {
     const infoDiv = document.getElementById('level-footprint-info');
     const corridorDiv = document.getElementById('corridor-info');
     const footprints = state.levels[state.currentLevel]?.objects.filter(o => o.isFootprint);
 
-    // Reset corridor info
     corridorDiv.innerHTML = '';
     corridorDiv.style.display = 'none';
 
     if (!footprints || footprints.length === 0 || state.scale.ratio === 0) {
         infoDiv.innerHTML = ''; return;
     }
-
+    const activeObj = state.canvas.getActiveObject();
     let totalArea = 0;
     let listHTML = '<h4>Footprints on this Level</h4><ul>';
     footprints.forEach((poly, index) => {
         const props = getPolygonProperties(poly);
         totalArea += props.area;
-        listHTML += `<li><b>Poly ${index + 1}:</b> ${f(props.area)} m² (Perim: ${f(props.perimeter, 1)} m)</li>`;
+
+        const isActive = (poly === activeObj);
+        const activeClass = isActive ? 'active-footprint-item' : '';
+
+        listHTML += `<li class="footprint-list-item ${activeClass}" data-index="${index}" title="Click to select this polygon"><b>Poly ${index + 1}:</b> ${f(props.area)} m² (Perim: ${f(props.perimeter, 1)} m)</li>`;
     });
     listHTML += '</ul>';
-    
+
     if (footprints.length > 1) {
         listHTML += `<div style="text-align:right; font-weight:bold; margin-top:5px;">Total Area: ${f(totalArea)} m²</div>`;
     }
     infoDiv.innerHTML = listHTML;
-    
+
     if (state.currentLevel === 'Typical_Floor' && state.lastCalculatedData && state.projectType === 'Residential') {
         let totalCorridorArea = 0;
-        let totalCorridorLength = 0;
         const counts = state.lastCalculatedData.aptCalcs.aptMixWithCounts.reduce((acc, apt) => ({ ...acc, [apt.key]: apt.countPerFloor }), {});
         const calcMode = document.getElementById('apartment-calc-mode').value;
         const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
@@ -262,6 +446,7 @@ export function updateLevelFootprintInfo() {
         }
     }
 }
+
 export function updateLevelCounts() {
     const params = {};
     document.querySelectorAll('.param-input').forEach(input => { params[input.id] = parseInt(input.value) || 0; });
@@ -274,6 +459,7 @@ export function updateLevelCounts() {
         }
     });
 }
+
 export function applyLevelVisibility() {
     const canvas = getCanvas();
     if (!canvas) return;
@@ -288,13 +474,81 @@ export function applyLevelVisibility() {
             return;
         }
         if (obj.level) {
-            obj.set('visible', state.allLayersVisible || obj.level === state.currentLevel);
+            if (state.levelVisibilityMode === 'custom') {
+                obj.set('visible', !!state.customLevelVisibility[obj.level]);
+            } else {
+                obj.set('visible', state.allLayersVisible || obj.level === state.currentLevel);
+            }
         }
     });
+
+    const toggleBtn = document.getElementById('toggle-visibility-btn');
+    if (toggleBtn) {
+        toggleBtn.textContent = (state.allLayersVisible && state.levelVisibilityMode !== 'custom') ? "Isolate Current Layer" : "Show All Layers";
+    }
     
-    document.getElementById('toggle-visibility-btn').textContent = state.allLayersVisible ? "Isolate Current Layer" : "Show All Layers";
     canvas.renderAll();
 }
+
+export function openLevelSelector() {
+    const modal = document.getElementById('level-selector-modal');
+    const container = document.getElementById('level-selection-list');
+    if (!modal || !container) return;
+
+    container.innerHTML = '';
+    LEVEL_ORDER.forEach(levelKey => {
+        const row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '10px';
+        row.style.padding = '5px';
+        row.style.borderBottom = '1px solid #eee';
+        row.style.cursor = 'pointer';
+
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.className = 'level-select-checkbox';
+        check.value = levelKey;
+        
+        if (state.levelVisibilityMode === 'custom') {
+            check.checked = !!state.customLevelVisibility[levelKey];
+        } else {
+            check.checked = state.allLayersVisible || levelKey === state.currentLevel;
+        }
+
+        const name = document.createElement('span');
+        name.textContent = levelKey.replace(/_/g, ' ');
+        name.style.fontSize = '0.9em';
+
+        row.appendChild(check);
+        row.appendChild(name);
+        container.appendChild(row);
+    });
+
+    modal.style.display = 'flex';
+}
+
+export function closeLevelSelector() {
+    const modal = document.getElementById('level-selector-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+export function applyLevelSelectionFromModal() {
+    const checkboxes = document.querySelectorAll('.level-select-checkbox');
+    state.customLevelVisibility = {};
+    checkboxes.forEach(cb => {
+        state.customLevelVisibility[cb.value] = cb.checked;
+    });
+    state.levelVisibilityMode = 'custom';
+    applyLevelVisibility();
+    closeLevelSelector();
+}
+
+export function setAllLevelCheckboxes(checked) {
+    const checkboxes = document.querySelectorAll('.level-select-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
 export function populateServiceBlocksDropdown() {
     const selectEl = document.getElementById('serviceBlockType');
     const addSubBlockSelect = document.getElementById('add-sub-block-select');
@@ -309,7 +563,7 @@ export function populateServiceBlocksDropdown() {
         if (levelIndexA !== levelIndexB) { return levelIndexA - levelIndexB; }
         return a.name.localeCompare(b.name);
     });
-    
+
     sortedData.forEach(item => {
         const key = `${item.name.replace(/[\s()./]/g, '_')}_${item.w}_${item.h}`;
         const option = document.createElement('option');
@@ -320,6 +574,7 @@ export function populateServiceBlocksDropdown() {
         addSubBlockSelect.appendChild(option.cloneNode(true));
     });
 }
+
 export function populateCompositeBlocks() {
     const select = document.getElementById('composite-block-select');
     const selectedValue = select.value;
@@ -333,6 +588,7 @@ export function populateCompositeBlocks() {
     if (selectedValue) select.value = selectedValue;
     updateUI();
 }
+
 export function renderServiceBlockList() {
     const listEl = document.getElementById('service-block-list');
     if (state.serviceBlocks.length === 0 || state.scale.ratio === 0) {
@@ -340,12 +596,22 @@ export function renderServiceBlockList() {
         return;
     }
 
-    const blocksByLevelAndCat = state.serviceBlocks.reduce((acc, block) => {
-        const level = block.level || 'Unassigned';
-        const category = (block.blockData?.category || 'default').toUpperCase();
+    const flatBlocks = [];
+    state.serviceBlocks.forEach(b => {
+        if (b.isCompositeGroup) {
+            b.getObjects().forEach(sub => {
+                if (sub.isServiceBlock) flatBlocks.push({ block: sub, parent: b });
+            });
+        } else if (b.isServiceBlock) {
+            flatBlocks.push({ block: b, parent: null });
+        }
+    });
+    const blocksByLevelAndCat = flatBlocks.reduce((acc, fb) => {
+        const level = (fb.parent ? fb.parent.level : fb.block.level) || 'Unassigned';
+        const category = (fb.block.blockData?.category || 'default').toUpperCase();
         if (!acc[level]) acc[level] = {};
         if (!acc[level][category]) acc[level][category] = [];
-        acc[level][category].push(block);
+        acc[level][category].push(fb);
         return acc;
     }, {});
 
@@ -356,8 +622,11 @@ export function renderServiceBlockList() {
         Object.keys(blocksByLevelAndCat[level]).sort().forEach(category => {
             let categoryTotalArea = 0;
             html += `<ul style="list-style-type: none; padding-left: 10px; margin: 2px 0;">`;
-            blocksByLevelAndCat[level][category].forEach(block => {
-                const areaM2 = (block.getScaledWidth() * block.getScaledHeight()) * (state.scale.ratio * state.scale.ratio);
+            blocksByLevelAndCat[level][category].forEach(fb => {
+                const { block, parent } = fb;
+                const scaleX = parent ? block.scaleX * parent.scaleX : block.scaleX;
+                const scaleY = parent ? block.scaleY * parent.scaleY : block.scaleY;
+                const areaM2 = (block.width * scaleX * block.height * scaleY) * (state.scale.ratio * state.scale.ratio);
                 categoryTotalArea += areaM2;
                 html += `<li title="${block.blockId}: ${block.blockData.name}">${block.blockId}: ${block.blockData.name} ${f(areaM2)} m²</li>`;
             });
@@ -379,46 +648,64 @@ export function updateSelectedObjectControls(obj) {
     }
 
     if (!obj || window.isEditingGroup) {
-        if(wrapper) wrapper.style.display = 'none';
-        if(nameEl) nameEl.textContent = '';
+        if (wrapper) wrapper.style.display = 'none';
+        if (nameEl) nameEl.textContent = '';
         return;
     }
-    
-    if(wrapper) wrapper.style.display = 'block';
+
+    if (wrapper) wrapper.style.display = 'block';
     const isServiceBlock = obj.isServiceBlock;
     const isComposite = obj.isCompositeGroup;
     const isFootprint = obj.isFootprint;
-    const isSubstation = isServiceBlock && obj.blockData.role === 'substation';
+    const isSubstation = isServiceBlock && obj.blockData && obj.blockData.role === 'substation';
 
-    if(nameEl) {
+
+    if (nameEl) {
         nameEl.textContent = isServiceBlock ? obj.blockData.name : (isComposite ? 'Composite Group' : 'Polygon');
     }
 
     document.getElementById('dimension-controls-wrapper').style.display = (isServiceBlock && !isComposite && !isSubstation) ? 'grid' : 'none';
     document.getElementById('substation-controls-wrapper').style.display = isSubstation ? 'block' : 'none';
-    
+
     if (isServiceBlock && !isComposite && !isSubstation) {
-        document.getElementById('block-width').value = (obj.getScaledWidth() * state.scale.ratio).toFixed(2);
-        document.getElementById('block-height').value = (obj.getScaledHeight() * state.scale.ratio).toFixed(2);
+        const scaledWidth = obj.getScaledWidth() * state.scale.ratio;
+        const scaledHeight = obj.getScaledHeight() * state.scale.ratio;
+        document.getElementById('block-width').value = scaledWidth.toFixed(2);
+        document.getElementById('block-height').value = scaledHeight.toFixed(2);
+
+        const area = scaledWidth * scaledHeight;
+        document.getElementById('block-area').value = area.toFixed(2);
+
+        let percentage = 'N/A';
+        const levelFootprints = state.levels[obj.level]?.objects.filter(o => o.isFootprint) || [];
+        let totalLevelArea = 0;
+        levelFootprints.forEach(poly => {
+            totalLevelArea += getPolygonProperties(poly).area;
+        });
+        if (totalLevelArea > 0) {
+            percentage = ((area / totalLevelArea) * 100).toFixed(2);
+        }
+        document.getElementById('block-percentage').value = percentage;
+
+        updateBlockLockUI();
     }
 
     if (isSubstation) {
         document.getElementById('substation-tcl').value = obj.blockData.tcl || 1500;
         document.getElementById('substation-num-tx').value = obj.blockData.numTx || 1;
     }
-    
+
     document.getElementById('block-rotation').value = (obj.angle || 0).toFixed(1);
     document.getElementById('rotation-control-wrapper').style.display = !isFootprint ? 'block' : 'none';
 
-
     document.getElementById('edit-group-btn').style.display = isComposite ? 'block' : 'none';
     document.getElementById('confirm-group-edit-btn').style.display = window.isEditingGroup ? 'block' : 'none';
-    if(window.isEditingGroup) {
+    if (window.isEditingGroup) {
         document.getElementById('edit-group-btn').style.display = 'none';
     }
     const categorySelect = document.getElementById('block-category-select');
     const categoryWrapper = document.getElementById('category-controls-wrapper');
-    
+
     if (isServiceBlock || isComposite) {
         categoryWrapper.style.display = 'block';
         let currentCategory = 'default';
@@ -431,6 +718,67 @@ export function updateSelectedObjectControls(obj) {
     } else {
         categoryWrapper.style.display = 'none';
     }
+
+    const playAreaWrapper = document.getElementById('playarea-controls-wrapper');
+    if (obj.isPlayArea) {
+        playAreaWrapper.style.display = 'block';
+        document.getElementById('is-covered-playarea').checked = !!obj.isCovered;
+    } else {
+        playAreaWrapper.style.display = 'none';
+    }
+}
+
+export function updateBlockLockUI() {
+    const lockDim = document.querySelector('input[name="lock-dim"]:checked')?.value || 'none';
+    const widthInput = document.getElementById('block-width');
+    const heightInput = document.getElementById('block-height');
+    const areaInput = document.getElementById('block-area');
+    const pctInput = document.getElementById('block-percentage');
+
+    if (!widthInput || !heightInput || !areaInput || !pctInput) return;
+
+    const redBg = '#ffcccc'; // light red for locked
+    const yellowBg = '#ffffcc'; // light yellow for editable
+    const defaultBg = '';
+
+    if (lockDim === 'width') {
+        widthInput.style.backgroundColor = redBg;
+        widthInput.disabled = true;
+
+        heightInput.style.backgroundColor = yellowBg;
+        heightInput.disabled = false;
+
+        areaInput.style.backgroundColor = yellowBg;
+        areaInput.disabled = false;
+
+        pctInput.style.backgroundColor = yellowBg;
+        pctInput.disabled = false;
+    } else if (lockDim === 'height') {
+        heightInput.style.backgroundColor = redBg;
+        heightInput.disabled = true;
+
+        widthInput.style.backgroundColor = yellowBg;
+        widthInput.disabled = false;
+
+        areaInput.style.backgroundColor = yellowBg;
+        areaInput.disabled = false;
+
+        pctInput.style.backgroundColor = yellowBg;
+        pctInput.disabled = false;
+    } else {
+        widthInput.style.backgroundColor = defaultBg;
+        widthInput.disabled = false;
+
+        heightInput.style.backgroundColor = defaultBg;
+        heightInput.disabled = false;
+
+        areaInput.style.backgroundColor = defaultBg;
+        areaInput.disabled = true;
+        areaInput.value = areaInput.value; // enforce readonly
+
+        pctInput.style.backgroundColor = defaultBg;
+        pctInput.disabled = true;
+    }
 }
 
 export function updateParkingDisplay(liveUnitCounts = null) {
@@ -439,21 +787,68 @@ export function updateParkingDisplay(liveUnitCounts = null) {
 
     const params = {};
     document.querySelectorAll('.param-input').forEach(input => { params[input.id] = parseInt(input.value) || 0; });
-    
-    const providedParking = state.parkingRows.reduce((sum, row) => {
-        let multiplier = 1;
-        if (row.level === 'Basement') multiplier = params.numBasements;
-        if (row.level === 'Podium') multiplier = params.numPodiums;
-        return sum + (row.parkingCount || 0) * multiplier;
-    }, 0);
+
+    let typicalBasementProv = 0;
+    let lastBasementProv = 0;
+    let podiumProv = 0;
+    let otherProv = 0;
+
+    let typicalLevelSum = 0;
+    let lastLevelSum = 0;
+
+    state.parkingRows.forEach(row => {
+        const count = row.parkingCount || 0;
+        if (row.level === 'Basement') {
+            typicalLevelSum += count;
+        } else if (row.level === 'Basement_Last') {
+            lastLevelSum += count;
+        } else if (row.level === 'Podium') {
+            podiumProv += count * params.numPodiums;
+        } else if (row.level === 'Podium_Last') {
+            podiumProv += count;
+        } else {
+            otherProv += count;
+        }
+    });
+
+    typicalBasementProv = typicalLevelSum * Math.max(0, params.numBasements - 1);
+    lastBasementProv = lastLevelSum; // Multiplier is always 1
+
+    const providedParking = typicalBasementProv + lastBasementProv + podiumProv + otherProv;
     provEl.textContent = fInt(providedParking);
+
+    // Construct formula display
+    const totalProvEl = document.getElementById('parking-provided');
+    if (totalProvEl && (typicalLevelSum > 0 || lastLevelSum > 0)) {
+        let formula = '';
+        if (params.numBasements > 1 && typicalLevelSum > 0) {
+            formula += `(Typical Basement (${params.numBasements}-1) x ${typicalLevelSum})`;
+        } else if (params.numBasements === 1 && typicalLevelSum > 0) {
+            // Even if there's only 1 basement, if they drew on "Typical", it won't be counted in the total due to (1-1)=0
+            // But we should probably show it in the formula if it exists, or just stick to the user's formula.
+            formula += `(Typical Basement (1-1) x ${typicalLevelSum})`;
+        }
+
+        if (lastLevelSum > 0) {
+            if (formula) formula += ' + ';
+            formula += `(Last Basement 1 x ${lastLevelSum})`;
+        }
+        
+        if (formula) {
+            totalProvEl.innerHTML = `${fInt(providedParking)} <br><small style="font-weight:normal; color:#666;">${formula}</small>`;
+        } else {
+            totalProvEl.textContent = fInt(providedParking);
+        }
+    } else {
+        provEl.textContent = fInt(providedParking);
+    }
 
     const isHotel = state.projectType === 'Hotel';
     document.getElementById('residential-parking-breakdown').style.display = isHotel ? 'none' : 'block';
     document.getElementById('hotel-parking-breakdown').style.display = isHotel ? 'block' : 'none';
-    
-    document.querySelectorAll('#parking-info b').forEach(el => { 
-        if(el.id !== 'parking-provided' && el.id !== 'parking-required-total') el.textContent = '0'; 
+
+    document.querySelectorAll('#parking-info b').forEach(el => {
+        if (el.id !== 'parking-provided' && el.id !== 'parking-required-total') el.textContent = '0';
     });
 
     if (state.lastCalculatedData) {
@@ -468,7 +863,7 @@ export function updateParkingDisplay(liveUnitCounts = null) {
                 else if (item.use.includes('Meeting')) document.getElementById('parking-required-hotel-meeting').textContent = fInt(item.required);
                 else if (item.use.includes('Retail')) document.getElementById('parking-required-hotel-retail').textContent = fInt(item.required);
             });
-        } else { 
+        } else {
             let res = 0, off = 0, ret = 0;
             parkingData.breakdown.forEach(item => {
                 if (item.use.includes('Residential') || item.use.includes('Studio') || item.use.includes('Bedroom') || item.use.includes('visitors')) res += item.required;
@@ -487,7 +882,7 @@ export function updateParkingDisplay(liveUnitCounts = null) {
                 const unit = state.currentProgram.unitTypes.find(u => u.key === key);
                 if (unit) resParking += (liveUnitCounts[key] || 0) * state.currentProgram.parkingRule(unit);
             });
-            resParking += Math.ceil(resParking * 0.1); 
+            resParking += Math.ceil(resParking * 0.1);
             totalEl.textContent = fInt(resParking);
             document.getElementById('parking-required-residential').textContent = fInt(resParking);
         } else { totalEl.textContent = '...'; }
@@ -501,6 +896,7 @@ export function updateParkingDisplay(liveUnitCounts = null) {
         totalEl.textContent = fInt(officeParkingReq + retailParkingReq);
     }
 }
+
 export function updateProgramUI() {
     const programControls = document.getElementById('program-specific-controls');
     if (state.currentProgram) {
@@ -513,7 +909,8 @@ export function updateProgramUI() {
         programControls.style.display = 'none';
     }
 }
-export function renderDistUI(){
+
+export function renderDistUI() {
     const distSlidersContainer = document.getElementById('dist-sliders-container');
     const manualCountsContainer = document.getElementById('manual-counts-container');
     const scenarioSelect = document.getElementById('scenarioSelect');
@@ -525,9 +922,9 @@ export function renderDistUI(){
         const sliderRow = document.createElement('div');
         sliderRow.className = 'dist-row';
         sliderRow.innerHTML = `<label for="range-${unit.key}">${unit.type}</label>
-            <input type="range" id="range-${unit.key}" min="0" max="100" value="${unit.mix||0}" data-key="${unit.key}" class="mix-input">
-            <input type="number" id="num-${unit.key}" min="0" max="100" value="${unit.mix||0}" data-key="${unit.key}" class="mix-input">
-            <input type="number" id="balc-${unit.key}" min="0" max="100" value="${unit.balconyCoverage||80}" data-key="${unit.key}" class="balcony-coverage-input" title="Balcony Coverage %">`;
+            <input type="range" id="range-${unit.key}" min="0" max="100" value="${unit.mix || 0}" data-key="${unit.key}" class="mix-input">
+            <input type="number" id="num-${unit.key}" min="0" max="100" value="${unit.mix || 0}" data-key="${unit.key}" class="mix-input">
+            <input type="number" id="balc-${unit.key}" min="0" max="100" value="${unit.balconyCoverage || 80}" data-key="${unit.key}" class="balcony-coverage-input" title="Balcony Coverage %">`;
         distSlidersContainer.appendChild(sliderRow);
 
         const manualRow = document.createElement('div');
@@ -545,11 +942,13 @@ export function renderDistUI(){
         });
     });
 }
+
 export function updateMixTotal() {
     if (!state.currentProgram) return;
     const total = state.currentProgram.unitTypes.reduce((sum, t) => sum + (t.mix || 0), 0);
     document.getElementById('mixTotal').textContent = `${total.toFixed(0)}%`;
 }
+
 export function applyScenario(name) {
     const selected = state.currentProgram.scenarios.find(s => s.name === name);
     if (selected) {
@@ -558,13 +957,15 @@ export function applyScenario(name) {
         handleCalculate(true);
     }
 }
+
 export function toggleApartmentMode(mode) {
     const distSliders = document.getElementById('dist-sliders');
     const manualCounts = document.getElementById('manual-counts-container');
-    if (mode === 'auto') { distSliders.style.display = 'block'; manualCounts.style.display = 'none'; } 
+    if (mode === 'auto') { distSliders.style.display = 'block'; manualCounts.style.display = 'none'; }
     else { distSliders.style.display = 'none'; manualCounts.style.display = 'block'; }
     handleCalculate(true);
 }
+
 export function renderUnitCards() {
     const container = document.getElementById('unit-cards-container');
     container.innerHTML = '';
@@ -572,23 +973,21 @@ export function renderUnitCards() {
         const card = document.createElement('div');
         card.className = 'unit-card';
         card.dataset.key = unit.key;
-         // --- MODIFICATION START: Make card draggable ---
         card.draggable = true;
         card.addEventListener('dragstart', (event) => {
             event.dataTransfer.setData("text/plain", unit.key);
             event.dataTransfer.effectAllowed = "copy";
         });
-        // --- MODIFICATION END ---
-        
+
         const bounds = unit.layout.reduce((acc, room) => ({
             minX: Math.min(acc.minX, room.x), minY: Math.min(acc.minY, room.y),
             maxX: Math.max(acc.maxX, room.x + room.w), maxY: Math.max(acc.maxY, room.y + room.h)
         }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-        
+
         const totalWidth = bounds.maxX - bounds.minX;
         const totalHeight = bounds.maxY - bounds.minY;
         let layoutSvg = '';
-        
+
         if (totalWidth > 0 && totalHeight > 0) {
             unit.layout.forEach(room => {
                 const relX = room.x - bounds.minX;
@@ -596,7 +995,7 @@ export function renderUnitCards() {
                 layoutSvg += `<g><rect x="${relX}" y="${relY}" width="${room.w}" height="${room.h}" fill="white" stroke="${unit.color}" stroke-width="0.1"/><text x="${relX + room.w / 2}" y="${relY + room.h / 2}" font-size="${Math.min(room.w, room.h) * 0.25}" fill="#333" text-anchor="middle" dominant-baseline="middle">${room.name}</text></g>`;
             });
         }
-        
+
         const svg = `<svg viewBox="-0.5 -0.5 ${totalWidth + 1} ${totalHeight + 1}" style="width: 100%; height: auto; border-radius: 4px; background-color:${unit.color.replace('0.7', '0.2')}"><rect x="0" y="0" width="${totalWidth}" height="${totalHeight}" rx="0.2" fill="none" stroke="${unit.color}" stroke-width="0.2"/>${layoutSvg}</svg>`;
 
         card.innerHTML = `
@@ -609,15 +1008,17 @@ export function renderUnitCards() {
         container.appendChild(card);
     });
 }
+
 export function openEditUnitModal(key) {
     const unit = state.currentProgram.unitTypes.find(t => t.key === key);
     if (!unit) return;
-    
-    tempUnitData = JSON.parse(JSON.stringify(unit)); 
+
+    tempUnitData = JSON.parse(JSON.stringify(unit));
     document.getElementById('edit-unit-title').textContent = `Edit ${unit.type}`;
     renderUnitEditorBody();
     document.getElementById('edit-unit-modal').style.display = 'flex';
 }
+
 export function renderUnitEditorBody() {
     const body = document.getElementById('edit-unit-body');
     const parkingRatio = state.currentProgram.parkingRule ? state.currentProgram.parkingRule(tempUnitData) : (tempUnitData.parkingRatio || 1);
@@ -646,6 +1047,7 @@ export function renderUnitEditorBody() {
     body.innerHTML = propertiesHTML + tableHTML;
     addUnitEditorListeners();
 }
+
 export function addUnitEditorListeners() {
     document.getElementById('unit-editor-type').addEventListener('change', e => { tempUnitData.type = e.target.value; });
     document.getElementById('unit-editor-parking').addEventListener('change', e => { tempUnitData.parkingRatio = parseFloat(e.target.value) || 0; });
@@ -668,6 +1070,7 @@ export function addUnitEditorListeners() {
         renderUnitEditorBody();
     });
 }
+
 export function saveUnitChanges() {
     const program = state.currentProgram;
     if (!program || !tempUnitData) return;
@@ -678,7 +1081,7 @@ export function saveUnitChanges() {
     document.getElementById('edit-unit-modal').style.display = 'none';
     currentlyEditingUnitKey = null;
     renderUnitCards();
-    renderDistUI(); 
+    renderDistUI();
     state.lastCalculatedData = null;
     state.currentApartmentLayout = null;
     document.getElementById('report-container').innerHTML = '<p style="text-align:center; color: #888;">Unit definitions have changed. Please click "Generate Report" to see updated calculations.</p>';
@@ -686,20 +1089,24 @@ export function saveUnitChanges() {
     state.canvas.requestRenderAll();
     updateUI();
 }
+
 export function placeSelectedComposite() {
     const index = document.getElementById('composite-block-select').value;
     if (index !== null && state.userCompositeBlocks[index]) {
         enterMode('placingCompositeBlock');
     }
 }
+
 let currentlyEditingCompositeIndex = -1;
 let tempCompositeData = null;
+
 export function editSelectedComposite() {
     const index = document.getElementById('composite-block-select').value;
     if (index !== null && state.userCompositeBlocks[index]) {
         openCompositeEditor(index);
     }
 }
+
 export function deleteSelectedComposite() {
     const index = document.getElementById('composite-block-select').value;
     if (index !== null && state.userCompositeBlocks[index]) {
@@ -709,6 +1116,7 @@ export function deleteSelectedComposite() {
         }
     }
 }
+
 export function openNewCompositeEditor() {
     currentlyEditingCompositeIndex = -1;
     tempCompositeData = { name: `New Core ${state.userCompositeBlocks.length + 1}`, level: "Typical_Floor", blocks: [] };
@@ -718,6 +1126,7 @@ export function openNewCompositeEditor() {
     renderCompositeEditorList();
     document.getElementById('edit-composite-modal').style.display = 'flex';
 }
+
 export function openCompositeEditor(index) {
     currentlyEditingCompositeIndex = index;
     tempCompositeData = JSON.parse(JSON.stringify(state.userCompositeBlocks[index]));
@@ -728,9 +1137,10 @@ export function openCompositeEditor(index) {
     renderCompositeEditorList();
     document.getElementById('edit-composite-modal').style.display = 'flex';
 }
+
 export function saveCompositeChanges() {
     const newName = document.getElementById('composite-block-name-input').value.trim();
-    if (!newName) { 
+    if (!newName) {
         document.getElementById('status-bar').textContent = 'Composite core name cannot be empty.';
         return;
     }
@@ -744,6 +1154,7 @@ export function saveCompositeChanges() {
     populateCompositeBlocks();
     document.getElementById('edit-composite-modal').style.display = 'none';
 }
+
 export function renderCompositeEditorList() {
     const listEl = document.getElementById('composite-sub-blocks-list');
     let tableHTML = `<table><thead><tr><th>Block</th><th>W</th><th>H</th><th>X</th><th>Y</th><th></th></tr></thead><tbody>`;
@@ -769,6 +1180,7 @@ export function renderCompositeEditorList() {
         renderCompositeEditorList();
     }));
 }
+
 export function addSubBlockToCompositeEditor() {
     const key = document.getElementById('add-sub-block-select').value;
     const blockData = PREDEFINED_BLOCKS[key];
@@ -777,6 +1189,7 @@ export function addSubBlockToCompositeEditor() {
         renderCompositeEditorList();
     }
 }
+
 export function openLevelOpModal(mode) {
     const object = state.canvas.getActiveObject();
     if (!object) {
@@ -803,6 +1216,7 @@ export function openLevelOpModal(mode) {
     }
     modal.style.display = 'flex';
 }
+
 export function handleConfirmLevelOp() {
     const { mode, object } = currentLevelOp;
     if (mode === 'move') {
@@ -814,19 +1228,58 @@ export function handleConfirmLevelOp() {
         }
     } else if (mode === 'copy') {
         const targetLevels = Array.from(document.querySelectorAll('#level-checklist input:checked')).map(cb => cb.value);
-        targetLevels.forEach((level, index) => {
-            object.clone(cloned => {
-                cloned.set({ level, left: object.left + 15 * (index + 1), top: object.top + 15 * (index + 1), });
-                if(cloned.isServiceBlock || cloned.isCompositeGroup) state.serviceBlocks.push(cloned);
-                else if (cloned.isParkingRow) state.parkingRows.push(cloned);
-                else if (cloned.isGuide) state.guideLines.push(cloned);
-                state.canvas.add(cloned);
+        const objectsToClone = object.type === 'activeSelection' ? object.getObjects() : [object];
+        const propertiesToInclude = [
+            'level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint', 
+            'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams', 
+            'parkingCount', 'isGuide', 'isImportedGeometry', 'layerName', 'hasBalcony', 
+            'isLinearFootprint', 'originalPoints', 'isPlotEdge', 'edgeIndex'
+        ];
+
+        targetLevels.forEach(level => {
+            objectsToClone.forEach(obj => {
+                // Get absolute world positioning
+                const matrix = obj.calcTransformMatrix();
+                const transform = fabric.util.qrDecompose(matrix);
+
+                obj.clone(cloned => {
+                    cloned.set({
+                        left: transform.translateX,
+                        top: transform.translateY,
+                        angle: transform.angle,
+                        scaleX: transform.scaleX,
+                        scaleY: transform.scaleY,
+                        skewX: transform.skewX,
+                        skewY: transform.skewY,
+                        level: level
+                    });
+                    cloned.setCoords();
+
+                    if (cloned.isServiceBlock || cloned.isCompositeGroup) {
+                        state.serviceBlocks.push(cloned);
+                    } else if (cloned.isParkingRow) {
+                        state.parkingRows.push(cloned);
+                    } else if (cloned.isGuide) {
+                        state.guideLines.push(cloned);
+                    } else if (cloned.isFootprint) {
+                        if (!state.levels[level]) state.levels[level] = { objects: [], isLocked: false };
+                        state.levels[level].objects.push(cloned);
+                    }
+
+                    state.canvas.add(cloned);
+                }, propertiesToInclude);
             });
         });
-        setTimeout(() => { state.canvas.renderAll(); renderServiceBlockList(); updateParkingDisplay(); }, 500);
+        setTimeout(() => { 
+            state.canvas.renderAll(); 
+            renderServiceBlockList(); 
+            updateParkingDisplay(); 
+            autosaveToLocalStorage();
+        }, 500);
     }
     document.getElementById('level-op-modal').style.display = 'none';
 }
+
 export function displayHotelRequirements() {
     const starRating = document.getElementById('hotel-star-rating').value;
     const modal = document.getElementById('hotel-req-modal');
@@ -851,9 +1304,6 @@ export function displayHotelRequirements() {
     modal.style.display = 'flex';
 }
 
-// ******************************************************
-// ***** NEW FUNCTIONS FOR MARKET RATE CALCULATOR *****
-// ******************************************************
 function getOnlineLandRate() {
     const locationSelect = document.getElementById('market-rates-location-select');
     const landCostInput = document.getElementById('cost-land');
@@ -867,33 +1317,27 @@ function getOnlineLandRate() {
 
     statusBar.textContent = `Fetching land rate for ${locationSelect.options[locationSelect.selectedIndex].text}...`;
 
-    // Simulate API call
     setTimeout(() => {
         const rate = DUBAI_LAND_RATES[selectedLocationId] || DUBAI_LAND_RATES['default'];
         landCostInput.value = rate;
         landCostInput.classList.remove('source-manual', 'source-local');
-        landCostInput.classList.add('source-online'); // Add class to show it's online data
+        landCostInput.classList.add('source-online');
         statusBar.textContent = `Land rate for ${locationSelect.options[locationSelect.selectedIndex].text} loaded.`;
     }, 800);
 }
-/**
- * Initializes the UI and event listeners for the Market Rate Analysis section.
- */
- 
- 
+
 function initMarketRatesUI() {
     const searchBar = document.getElementById('market-rates-location-search');
     const locationSelect = document.getElementById('market-rates-location-select');
     const getRatesButton = document.getElementById('get-market-rates-btn');
 
-    // Function to populate the location dropdown, with an optional filter
-     const exportButton = document.getElementById('export-market-rates-btn');
+    const exportButton = document.getElementById('export-market-rates-btn');
     const importInput = document.getElementById('import-market-rates-upload');
 
     const populateLocations = (filter = '') => {
         locationSelect.innerHTML = '';
         const filtered = DUBAI_LOCATIONS.filter(loc => loc.name.toLowerCase().includes(filter.toLowerCase()));
-        
+
         if (filtered.length === 0) {
             const option = document.createElement('option');
             option.textContent = 'No locations found...';
@@ -910,13 +1354,11 @@ function initMarketRatesUI() {
         });
     };
 
-    // Initial population
     populateLocations();
 
-    // Add event listeners
     searchBar.addEventListener('input', (e) => populateLocations(e.target.value));
     getRatesButton.addEventListener('click', fetchMarketRates);
-     exportButton.addEventListener('click', exportMarketRatesXML);
+    exportButton.addEventListener('click', exportMarketRatesXML);
     importInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -925,16 +1367,13 @@ function initMarketRatesUI() {
                 updateOfflineStatus();
             });
         }
-        e.target.value = ''; // Reset file input
+        e.target.value = '';
     });
 
     updateOfflineStatus();
 }
 
-/**
- * Simulates fetching market rates for the selected location and displays them in a table.
- */
- function updateOfflineStatus() {
+function updateOfflineStatus() {
     const statusEl = document.getElementById('offline-rates-status');
     if (state.offlineMarketRates) {
         const count = Object.keys(state.offlineMarketRates).length;
@@ -960,21 +1399,19 @@ function fetchMarketRates() {
         return;
     }
 
-    // --- Simulation Starts ---
     messageEl.textContent = `Fetching rates for ${selectedLocationName}...`;
     messageEl.style.color = 'inherit';
     tableContainer.style.display = 'none';
     tableBody.innerHTML = '';
-    state.lastMarketRates = null; // Clear old rates
-// First, check for offline data
+    state.lastMarketRates = null;
+
     if (state.offlineMarketRates && state.offlineMarketRates[selectedLocationId]) {
         messageEl.textContent = `Using offline rates for ${selectedLocationName}...`;
         const offlineRates = state.offlineMarketRates[selectedLocationId];
-         processRatesData(offlineRates, selectedLocationName, 'local');
+        processRatesData(offlineRates, selectedLocationName, 'local');
         return;
     }
 
-    // If no offline data, fall back to live simulation
     messageEl.textContent = `Simulating live rates for ${selectedLocationName}...`;
     messageEl.style.color = 'inherit';
     setTimeout(() => {
@@ -993,7 +1430,7 @@ function processRatesData(ratesData, locationName, source) {
     const tableBody = document.getElementById('market-rates-table-body');
     const messageEl = document.getElementById('market-rates-message');
     const tableContainer = document.getElementById('market-rates-table-container');
-    
+
     state.lastMarketRates = { ...ratesData, source };
     tableBody.innerHTML = '';
 
@@ -1011,21 +1448,19 @@ function processRatesData(ratesData, locationName, source) {
     tableContainer.style.display = 'block';
     document.getElementById('status-bar').textContent = `Market rates for ${locationName} loaded. You can now generate a detailed report with financial analysis.`;
 }
-// ******************************************
-// ***** NEW FUNCTION FOR UI TOGGLES *****
-// ******************************************
+
 function initCollapsibleSections() {
     document.querySelectorAll('.collapsible-header').forEach(header => {
         header.addEventListener('click', () => {
             const content = header.nextElementSibling;
             const indicator = header.querySelector('span');
-            
+
             header.classList.toggle('collapsed');
             content.classList.toggle('collapsed');
-            
+
             if (content.classList.contains('collapsed')) {
                 indicator.textContent = '+';
-                if(header.classList.contains('collapsed')) {
+                if (header.classList.contains('collapsed')) {
                     indicator.style.transform = 'rotate(0deg)';
                 } else {
                     indicator.style.transform = 'rotate(45deg)';
@@ -1041,7 +1476,7 @@ function calculateDewaCharges() {
     const tclInput = document.getElementById('cost-tcl-kw');
     const electricalCostInput = document.getElementById('cost-electrical');
     let tcl = parseFloat(tclInput.value) || 0;
-    
+
     const slabs = [
         { limit: 170, rate: 250 },
         { limit: 400, rate: 290 },
@@ -1049,120 +1484,266 @@ function calculateDewaCharges() {
         { limit: 2000, rate: 310 },
         { limit: Infinity, rate: 317 }
     ];
-    
+
     let totalCost = 0;
     let remainingLoad = tcl;
     let lastLimit = 0;
 
     for (const slab of slabs) {
         if (remainingLoad <= 0) break;
-        
+
         const slabCapacity = slab.limit - lastLimit;
         const loadInSlab = Math.min(remainingLoad, slabCapacity);
-        
+
         totalCost += loadInSlab * slab.rate;
-        
+
         remainingLoad -= loadInSlab;
         lastLimit = slab.limit;
     }
 
-    // Add fixed fees
     const knowledgeFee = 10;
     const innovationFee = 10;
     totalCost += knowledgeFee + innovationFee;
 
     electricalCostInput.value = totalCost.toFixed(0);
 }
-//
-// NEW: Manual Area Statement Floater
+
+export function updateAreaStatementPanel(data) {
+    const panel = document.getElementById('area-statement-panel');
+    if (!panel) return;
+
+    if (!data) {
+        panel.innerHTML = '<p style="color:#999; text-align:center;">Area statement will appear here after calculation</p>';
+        return;
+    }
+
+    const { levelBreakdown } = data;
+    let totalGfa = 0;
+    let totalBua = 0;
+
+    const plotProps = state.plotPolygon ? getPolygonProperties(state.plotPolygon) : { area: 0 };
+    const plotArea = plotProps.area;
+
+    const allowedResidentialGfa = parseFloat(document.getElementById('allowedResidentialGfa')?.value) || 0;
+    const allowedRetailGfa = parseFloat(document.getElementById('allowedRetailGfa')?.value) || 0;
+    const allowedOfficeGfa = parseFloat(document.getElementById('allowedOfficeGfa')?.value) || 0;
+    const allowedNurseryGfa = parseFloat(document.getElementById('allowedNurseryGfa')?.value) || 0;
+    const allowedCommercialGfa = parseFloat(document.getElementById('allowedCommercialGfa')?.value) || 0;
+    const allowedSupermarketGfa = parseFloat(document.getElementById('allowedSupermarketGfa')?.value) || 0;
+
+    const componentTotalGfa = allowedResidentialGfa + allowedRetailGfa + allowedOfficeGfa + allowedNurseryGfa + allowedCommercialGfa + allowedSupermarketGfa;
+
+    const totalGfaField = document.getElementById('allowedGfa');
+    if (totalGfaField && componentTotalGfa > 0) {
+        totalGfaField.value = componentTotalGfa.toFixed(2);
+    }
+
+    const totalGfaSumDisplay = document.getElementById('total-gfa-sum');
+    const totalGfaSumRatioDisplay = document.getElementById('total-gfa-sum-ratio');
+    if (totalGfaSumDisplay) {
+        if (componentTotalGfa > 0) {
+            totalGfaSumDisplay.textContent = f(componentTotalGfa) + ' m²';
+        } else if (allowedGfa > 0) {
+            totalGfaSumDisplay.textContent = f(allowedGfa) + ' m²';
+        } else {
+            totalGfaSumDisplay.textContent = '—';
+        }
+    }
+    if (totalGfaSumRatioDisplay) {
+        totalGfaSumRatioDisplay.textContent = '100';
+    }
+
+    let html = `<table style="width:100%; border-collapse:collapse; margin-bottom:15px; font-size:0.95em;">
+        <thead>
+            <tr style="background-color:#f5f5f5; font-weight:bold;">
+                <th style="padding:8px; text-align:left; border-bottom:2px solid #ccc;">Level / Type</th>
+                <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc;">Floors</th>
+                <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc;">Area/Floor (m²)</th>
+                <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc;">Total Area (m²)</th>
+                <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc;">% of Plot</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    Object.keys(levelBreakdown).forEach(levelKey => {
+        const breakdown = levelBreakdown[levelKey];
+        if (breakdown) {
+            const sellableArea = breakdown.sellableGfa.value;
+            const commonArea = breakdown.commonGfa.value;
+            const totalPerFloor = sellableArea + commonArea;
+            const totalForLevel = totalPerFloor * breakdown.multiplier;
+            const ratio = plotArea > 0 ? ((totalForLevel / plotArea) * 100).toFixed(2) : 0;
+
+            totalGfa += totalPerFloor * breakdown.multiplier;
+            totalBua += (totalForLevel + breakdown.service.value * breakdown.multiplier + breakdown.parking.value * breakdown.multiplier + breakdown.balconyTerrace.value * breakdown.multiplier);
+
+            const levelName = levelKey.replace(/_/g, ' ');
+            html += `<tr style="border-bottom:1px solid #eee;">
+                <td style="padding:6px 8px; font-weight:500;">${levelName}</td>
+                <td style="padding:6px 8px; text-align:right;">${breakdown.multiplier}</td>
+                <td style="padding:6px 8px; text-align:right;">${f(totalPerFloor)}</td>
+                <td style="padding:6px 8px; text-align:right;"><strong>${f(totalForLevel)}</strong></td>
+                <td style="padding:6px 8px; text-align:right;">${ratio}%</td>
+            </tr>`;
+        }
+    });
+
+    const totalRatio = plotArea > 0 ? ((totalGfa / plotArea) * 100).toFixed(2) : 0;
+    html += `<tr style="background-color:#fff9c4; font-weight:bold; border-top:2px solid #333;">
+        <td style="padding:8px;">TOTAL ALL LEVELS</td>
+        <td style="padding:8px; text-align:right;">—</td>
+        <td style="padding:8px; text-align:right;">—</td>
+        <td style="padding:8px; text-align:right; color:#f57f17; font-size:1.05em;">${f(totalGfa)}</td>
+        <td style="padding:8px; text-align:right;">${totalRatio}%</td>
+    </tr>
+    <tr style="background-color:#f0f7ff; font-weight:bold;">
+        <td style="padding:8px;">TOTAL GFA (Calculated)</td>
+        <td style="padding:8px; text-align:right;">-</td>
+        <td style="padding:8px; text-align:right;">-</td>
+        <td style="padding:8px; text-align:right;">${f(totalGfa)}</td>
+        <td style="padding:8px; text-align:right;">${totalRatio}%</td>
+    </tr>`;
+
+    html += `</tbody></table>`;
+
+    const gfaMismatchThreshold = 100;
+    const hasComponentDifference = componentTotalGfa > 0 && Math.abs(totalGfa - componentTotalGfa) > gfaMismatchThreshold;
+
+    const componentBasedColor = hasComponentDifference ? '#ffebee' : '#f0f7ff';
+    const calculatedColor = '#e8f5e9';
+
+    html += `<div style="margin-top:15px; padding:12px; background-color:#fafafa; border-radius:4px; border-left:4px solid #2196F3;">
+        <h4 style="margin:0 0 10px 0; font-size:1em;">GFA Composition Analysis</h4>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div style="padding:10px; background-color:${calculatedColor}; border:1px solid #81c784; border-radius:3px;">
+                <div style="font-size:0.85em; color:#333; margin-bottom:3px;">GFA from Calculated Footprints</div>
+                <div style="font-size:1.2em; font-weight:bold; color:#2e7d32;">${f(totalGfa)} m²</div>
+                <div style="font-size:0.75em; color:#666; margin-top:3px;">Residential + Hotel + Other</div>
+            </div>
+            
+            <div style="padding:10px; background-color:${componentBasedColor}; border:1px solid ${hasComponentDifference ? '#ef5350' : '#81c784'}; border-radius:3px;">
+                <div style="font-size:0.85em; color:#333; margin-bottom:3px;">GFA from Area Inputs</div>
+                <div style="font-size:1.2em; font-weight:bold; color:${hasComponentDifference ? '#c62828' : '#2e7d32'};">${f(componentTotalGfa)} m²</div>
+                <div style="font-size:0.75em; color:#666; margin-top:3px;">Total + Residential + Retail + Office + Nursery</div>
+                ${hasComponentDifference ? `<div style="font-size:0.75em; color:#c62828; margin-top:5px; font-weight:bold;">⚠ ${Math.abs(totalGfa - componentTotalGfa).toFixed(0)} m² difference</div>` : ''}
+            </div>
+        </div>
+    </div>`;
+
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+        <div style="padding:10px; background-color:#fff; border:1px solid #e0e0e0; border-radius:3px;">
+            <div style="font-size:0.85em; color:#666; margin-bottom:3px;">Plot Area</div>
+            <div style="font-size:1.1em; font-weight:bold;">${f(plotArea)} m²</div>
+        </div>
+        <div style="padding:10px; background-color:#fff; border:1px solid #e0e0e0; border-radius:3px;">
+            <div style="font-size:0.85em; color:#666; margin-bottom:3px;">Calculated Ratio</div>
+            <div style="font-size:1.1em; font-weight:bold;">${totalRatio}%</div>
+        </div>
+        <div style="padding:10px; background-color:#fff; border:1px solid #e0e0e0; border-radius:3px;">
+            <div style="font-size:0.85em; color:#666; margin-bottom:3px;">Total GFA Ratio</div>
+            <div style="font-size:1.1em; font-weight:bold;">${plotArea > 0 ? ((totalGfa / plotArea) * 100).toFixed(2) : 0}%</div>
+        </div>
+        <div style="padding:10px; background-color:#fff; border:1px solid #e0e0e0; border-radius:3px;">
+            <div style="font-size:0.85em; color:#666; margin-bottom:3px;">Total BUA</div>
+            <div style="font-size:1.1em; font-weight:bold;">${f(totalBua)} m²</div>
+        </div>
+    </div>`;
+
+    panel.innerHTML = html;
+}
+
 export function openAreaStatementModal() {
     const data = state.lastCalculatedData;
     const modal = document.getElementById('area-statement-modal');
     const body = document.getElementById('area-statement-body');
-    
-    // Always open, but show placeholder if no data
+
     modal.style.display = 'flex';
 
     if (!data) {
         body.innerHTML = '<p>Please generate a report first to see calculated values. You can add manual overrides below.</p>';
-        // Still render the rest of the editable modal
     } else {
-        const { levelBreakdown } = data;
-        let html = '<form id="area-statement-form">';
-        const allLevelKeys = new Set([...LEVEL_ORDER, ...Object.keys(state.manualAreaOverrides)]);
+        const { levelBreakdown, areas } = data;
+        let totalGfa = 0;
+        let totalBua = 0;
 
-        allLevelKeys.forEach(levelKey => {
-            const calculated = levelBreakdown[levelKey];
-            if (calculated && (calculated.multiplier > 0 || state.manualAreaOverrides[levelKey])) {
-                const levelName = `${levelKey.replace(/_/g, ' ')} ${calculated.multiplier > 1 ? `(x${calculated.multiplier})` : ''}`;
-                html += `<div class="area-level-group"><h4>${levelName}</h4>`;
+        const plotProps = state.plotPolygon ? getPolygonProperties(state.plotPolygon) : { area: 0 };
+        const plotArea = plotProps.area;
 
-                const createRow = (label, type, areaObject) => {
-                    const isOverridden = areaObject.source === 'manual';
-                    return `<div class="area-item">
-                                <span>${label}</span>
-                                <input type="number" step="0.01" value="${areaObject.value.toFixed(2)}" data-level="${levelKey}" data-type="${type}" class="${isOverridden ? 'source-manual' : 'source-auto'}">
-                            </div>`;
-                };
+        let html = `<table class="area-statement-table" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+            <thead>
+                <tr style="background-color:#f5f5f5; font-weight:bold;">
+                    <th style="padding:10px; text-align:left; border-bottom:2px solid #ccc;">Level / Type</th>
+                    <th style="padding:10px; text-align:right; border-bottom:2px solid #ccc;">Floors</th>
+                    <th style="padding:10px; text-align:right; border-bottom:2px solid #ccc;">Area/Floor (m²)</th>
+                    <th style="padding:10px; text-align:right; border-bottom:2px solid #ccc;">Total Area (m²)</th>
+                    <th style="padding:10px; text-align:right; border-bottom:2px solid #ccc;">% of Plot</th>
+                </tr>
+            </thead>
+            <tbody>`;
 
-                html += `<div class="area-section gfa"><h5>GFA</h5>`;
-                html += createRow('(+) Sellable', 'sellableGfa', calculated.sellableGfa);
-                html += createRow('(+) Common', 'commonGfa', calculated.commonGfa);
-                html += `</div>`;
+        Object.keys(levelBreakdown).forEach(levelKey => {
+            const breakdown = levelBreakdown[levelKey];
+            if (breakdown && breakdown.multiplier > 0) {
+                const sellableArea = breakdown.sellableGfa.value;
+                const commonArea = breakdown.commonGfa.value;
+                const totalPerFloor = sellableArea + commonArea;
+                const totalForLevel = totalPerFloor * breakdown.multiplier;
+                const ratio = plotArea > 0 ? ((totalForLevel / plotArea) * 100).toFixed(2) : 0;
 
-                html += `<div class="area-section bua"><h5>BUA Additions</h5>`;
-                html += createRow('(+) Services', 'service', calculated.service);
-                html += createRow('(+) Parking', 'parking', calculated.parking);
-                html += createRow('(+) Balcony/Terrace', 'balconyTerrace', calculated.balconyTerrace);
-                html += `</div></div>`;
+                totalGfa += totalPerFloor * breakdown.multiplier;
+                totalBua += (totalForLevel + breakdown.service.value * breakdown.multiplier + breakdown.parking.value * breakdown.multiplier + breakdown.balconyTerrace.value * breakdown.multiplier);
+
+                const levelName = levelKey.replace(/_/g, ' ');
+                html += `<tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px; font-weight:500;">${levelName}</td>
+                    <td style="padding:8px; text-align:right;">${breakdown.multiplier}</td>
+                    <td style="padding:8px; text-align:right;">${f(totalPerFloor)}</td>
+                    <td style="padding:8px; text-align:right;"><strong>${f(totalForLevel)}</strong></td>
+                    <td style="padding:8px; text-align:right;">${ratio}%</td>
+                </tr>`;
             }
         });
-        html += `</form>`;
+
+        const totalRatio = plotArea > 0 ? ((totalGfa / plotArea) * 100).toFixed(2) : 0;
+        html += `<tr style="background-color:#f9f9f9; font-weight:bold; border-top:2px solid #333;">
+            <td style="padding:10px;">TOTAL GFA</td>
+            <td style="padding:10px; text-align:right;">-</td>
+            <td style="padding:10px; text-align:right;">-</td>
+            <td style="padding:10px; text-align:right;">${f(totalGfa)}</td>
+            <td style="padding:10px; text-align:right;">${totalRatio}%</td>
+        </tr>`;
+
+        html += `</tbody></table>`;
+
+        html += `<div style="margin:15px 0; padding:15px; background-color:#f0f7ff; border-radius:5px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div>
+                    <div style="font-size:0.9em; color:#666;">Plot Area</div>
+                    <div style="font-size:1.3em; font-weight:bold;">${f(plotArea)} m²</div>
+                </div>
+                <div>
+                    <div style="font-size:0.9em; color:#666;">Total GFA</div>
+                    <div style="font-size:1.3em; font-weight:bold;">${f(totalGfa)} m²</div>
+                </div>
+                <div>
+                    <div style="font-size:0.9em; color:#666;">GFA Ratio</div>
+                    <div style="font-size:1.3em; font-weight:bold;">${totalRatio}%</div>
+                </div>
+                <div>
+                    <div style="font-size:0.9em; color:#666;">Total BUA</div>
+                    <div style="font-size:1.3em; font-weight:bold;">${f(totalBua)} m²</div>
+                </div>
+            </div>
+        </div>`;
+
         body.innerHTML = html;
     }
-    
-    /* const { levelBreakdown } = data || { levelBreakdown: {} };
-    
-    let html = '<form id="area-statement-form">';
-    const allLevelKeys = new Set([...LEVEL_ORDER, ...Object.keys(state.manualAreaOverrides)]);
 
-    allLevelKeys.forEach(levelKey => {
-        const calculated = levelBreakdown[levelKey] || { multiplier: 0, sellableGfa: {value:0}, commonGfa: {value:0}, service: {value:0}, parking: {value:0}, balconyTerrace: {value:0} };
-        
-        if (calculated.multiplier > 0 || state.manualAreaOverrides[levelKey]) {
-            const levelName = `${levelKey.replace(/_/g, ' ')} ${calculated.multiplier > 1 ? `(x${calculated.multiplier})` : ''}`;
-            html += `<div class="area-level-group"><h4>${levelName}</h4>`;
-
-             const createRow = (label, type, areaObject) => {
-                 const isOverridden = areaObject.source === 'manual';
-                return `<div class="area-item">
-                            <span>${label}</span>
-                            <input type="number" step="0.01" value="${areaObject.value.toFixed(2)}" data-level="${levelKey}" data-type="${type}" class="${isOverridden ? 'source-manual' : 'source-auto'}">
-                        </div>`;
-            };
-
-            html += `<div class="area-section gfa"><h5>GFA</h5>`;
-            html += createRow('(+) Sellable', 'sellableGfa', calculated.sellableGfa);
-            html += createRow('(+) Common', 'commonGfa', calculated.commonGfa);
-            html += `</div>`;
-
-            html += `<div class="area-section bua"><h5>BUA Additions</h5>`;
-            html += createRow('(+) Services', 'service', calculated.service);
-            html += createRow('(+) Parking', 'parking', calculated.parking);
-            html += createRow('(+) Balcony/Terrace', 'balconyTerrace', calculated.balconyTerrace);
-            html += `</div></div>`;
-        }
-    });
-
-    html += `</form>`;
-    body.innerHTML = html; */
-
-    // Populate the "Add Manual Entry" dropdowns
     const levelSelect = document.getElementById('manual-area-level');
     levelSelect.innerHTML = LEVEL_ORDER.map(l => `<option value="${l}">${l.replace(/_/g, ' ')}</option>`).join('');
-
 }
-// --- CORE DASHBOARD LOGIC ---
+
 export function updateDashboard() {
     const inputs = {
         allowedGfa: parseFloat(document.getElementById('allowedGfa').value) || 0,
@@ -1174,84 +1755,79 @@ export function updateDashboard() {
         floors: parseFloat(document.getElementById('numTypicalFloors').value) || 0
     };
 
-    // 1. Plot Area
     let plotArea = 0;
     const manualArea = parseFloat(document.getElementById('manual-plot-area').value);
-    if(manualArea > 0) {
+    if (manualArea > 0) {
         plotArea = manualArea;
         document.getElementById('plot-info').textContent = `Using Manual Area: ${f(manualArea)} m²`;
-    } else if(state.plotPolygon && state.scale.ratio > 0) {
+    } else if (state.plotPolygon && state.scale.ratio > 0) {
         plotArea = getPolygonProperties(state.plotPolygon).area;
         document.getElementById('plot-info').innerHTML = `<b>Plot:</b> Area: ${f(plotArea)} m² | Perim: ${f(getPolygonProperties(state.plotPolygon).perimeter)} m`;
     }
 
-    // 2. Footprint Areas
     let typFootprintArea = 0;
     state.levels['Typical_Floor'].objects.forEach(obj => { if (obj.isFootprint) typFootprintArea += getPolygonProperties(obj).area });
 
-    // 3. GFA Calculation
     const grossTypGfa = typFootprintArea * inputs.floors;
-    // Note: The below is a simplification. The detailed report has the source of truth.
     const resGfa = (state.lastCalculatedData?.areas?.achievedResidentialGfa) || 0;
     const consumedGfa = (state.lastCalculatedData?.summary?.totalGfa) || (resGfa + inputs.retail + inputs.office + inputs.nursery);
     const balance = inputs.allowedGfa - consumedGfa;
 
-    // 4. BUA
     const bua = (state.lastCalculatedData?.summary?.totalBuiltup) || 0;
     const efficiency = (state.lastCalculatedData?.summary?.efficiency) || 0;
 
-    // 5. Residential
     const sellable = (state.lastCalculatedData?.summary?.totalSellable) || 0;
 
-    // 6. Egress & Utilities
     const totalOccupancy = (state.lastCalculatedData?.lifts?.totalOccupancy || 0);
-    const waterReq = (totalOccupancy * 250 / 1000).toFixed(0); // Assuming 250 L/person/day
+    const waterReq = (totalOccupancy * 250 / 1000).toFixed(0);
     const garbageBins = Math.ceil(totalOccupancy / 100);
     const lifts = state.lastCalculatedData?.lifts || { required: 0, provided: 0 };
     const stairs = state.lastCalculatedData?.staircases || { required: 2, provided: 0 };
 
-    // Substation / RMU
     let rmuArea = 0;
-    state.serviceBlocks.forEach(blk => {
-        if(blk.blockData && blk.blockData.name === 'RMU Room') rmuArea += (blk.getScaledWidth() * blk.getScaledHeight() * state.scale.ratio * state.scale.ratio);
+    state.serviceBlocks.forEach(b => {
+        if (b.isCompositeGroup) {
+            b.getObjects().forEach(sub => {
+                if (sub.isServiceBlock && sub.blockData && sub.blockData.name === 'RMU Room') {
+                    rmuArea += (sub.width * sub.scaleX * b.scaleX * sub.height * sub.scaleY * b.scaleY * state.scale.ratio * state.scale.ratio);
+                }
+            });
+        } else if (b.isServiceBlock && b.blockData && b.blockData.name === 'RMU Room') {
+            rmuArea += (b.getScaledWidth() * b.getScaledHeight() * state.scale.ratio * state.scale.ratio);
+        }
     });
-    
+
     const loadKVA = ((resGfa * 0.08) + (inputs.retail * 0.15) + (inputs.office * 0.12)).toFixed(0);
     let subReqArea = Math.ceil(loadKVA / 1500) * 35;
     if (rmuArea > 0) subReqArea = Math.max(0, subReqArea - 10);
 
-    // Update UI - Use f() for decimals, fInt() for counts
     setDashVal('dash-allowed-gfa', f(inputs.allowedGfa));
     setDashVal('dash-consumed-gfa', f(consumedGfa));
     setDashVal('dash-balance-gfa', f(balance), balance >= 0 ? 'good' : 'bad');
     setDashVal('dash-bua', f(bua));
     setDashVal('dash-efficiency', f(efficiency, 1) + '%');
-    
+
     setDashVal('dash-res-gfa', f(state.lastCalculatedData?.areas?.achievedResidentialGfa || 0));
     setDashVal('dash-retail-gfa', f(state.lastCalculatedData?.areas?.achievedRetailGfa || 0));
     setDashVal('dash-office-gfa', f(state.lastCalculatedData?.areas?.achievedOfficeGfa || 0));
-    setDashVal('dash-nursery-gfa', f(inputs.nursery)); 
-    
+    setDashVal('dash-nursery-gfa', f(inputs.nursery));
+
     setDashVal('dash-sellable', f(sellable));
-    
-    // Egress & Occupancy Section
+
     setDashVal('dash-occupancy', fInt(totalOccupancy));
     const liftsSurplus = lifts.provided - lifts.required;
     setDashVal('dash-lifts-info', `${fInt(lifts.required)} / ${fInt(lifts.provided)}`, liftsSurplus >= 0 ? 'good' : 'bad');
     const stairsSurplus = stairs.provided - stairs.required;
     setDashVal('dash-stairs-info', `${fInt(stairs.required)} / ${fInt(stairs.provided)}`, stairsSurplus >= 0 ? 'good' : 'bad');
 
-    // Utilities Section
     setDashVal('dash-garbage-req', fInt(garbageBins));
     setDashVal('dash-water-req', fInt(waterReq) + ' m³/d');
     setDashVal('dash-elec-load', fInt(loadKVA) + ' kVA');
     setDashVal('dash-rmu-area', f(rmuArea) + ' m²');
     setDashVal('dash-substation-req', f(subReqArea) + ' m²');
 
-    // --- UNIT COUNT DISPLAY LOGIC ---
     const container = document.getElementById('dash-wing-details');
     if (state.lastCalculatedData && state.lastCalculatedData.aptCalcs && state.lastCalculatedData.aptCalcs.wingBreakdown?.length > 0) {
-        // Use data from the last full calculation (matches the report)
         const aptCalcs = state.lastCalculatedData.aptCalcs;
         let html = '<div class="dash-row header">Calculated Units (per Floor)</div>';
         let totalUnits = 0;
@@ -1266,44 +1842,113 @@ export function updateDashboard() {
         }
         container.innerHTML = html;
     } else {
-        // Fallback to live estimation if no report data is available
         updateLiveApartmentCalc();
     }
 }
+export function alignCoreElements() {
+    const referenceLevel = 'Typical_Floor';
 
-export function setDashVal(id, val, cls) {
-    const el = document.getElementById(id);
-    if(el) {
-        el.textContent = val;
-        el.className = 'dash-val ' + (cls||'');
+    const getCoreBlocks = (level) => {
+        return state.serviceBlocks.filter(b => {
+            if (b.level !== level) return false;
+            if (b.isCompositeGroup) {
+                return b.getObjects().some(sub => sub.blockData && (sub.blockData.name.toLowerCase().includes('lift') || sub.blockData.role === 'staircase'));
+            }
+            return b.blockData && (b.blockData.name.toLowerCase().includes('lift') || b.blockData.role === 'staircase');
+        });
+    };
+
+    const calculateCentroid = (blocks) => {
+        if (!blocks || blocks.length === 0) return null;
+        const center = blocks.reduce((acc, block) => {
+            const blockCenter = block.getCenterPoint();
+            acc.x += blockCenter.x;
+            acc.y += blockCenter.y;
+            return acc;
+        }, { x: 0, y: 0 });
+
+        center.x /= blocks.length;
+        center.y /= blocks.length;
+        return center;
+    };
+
+    const referenceCoreBlocks = getCoreBlocks(referenceLevel);
+    if (referenceCoreBlocks.length === 0) {
+        document.getElementById('status-bar').textContent = `No core elements (lifts/stairs) found on the reference level '${referenceLevel.replace(/_/g, ' ')}' to align to.`;
+        return;
+    }
+
+    const referenceCentroid = calculateCentroid(referenceCoreBlocks);
+
+    let alignedLevels = 0;
+    LEVEL_ORDER.forEach(levelKey => {
+        if (levelKey === referenceLevel) return;
+
+        const levelCoreBlocks = getCoreBlocks(levelKey);
+        if (levelCoreBlocks.length === 0) return;
+
+        const levelCentroid = calculateCentroid(levelCoreBlocks);
+        if (!levelCentroid) return;
+
+        const dx = referenceCentroid.x - levelCentroid.x;
+        const dy = referenceCentroid.y - levelCentroid.y;
+
+        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
+
+        levelCoreBlocks.forEach(block => {
+            block.set({
+                left: block.left + dx,
+                top: block.top + dy
+            });
+            block.setCoords();
+        });
+        alignedLevels++;
+    });
+
+    if (alignedLevels > 0) {
+        state.canvas.renderAll();
+        recordAction('ALIGN_CORE', { referenceLevel });
+        document.getElementById('status-bar').textContent = `Successfully aligned cores on ${alignedLevels} level(s).`;
+    } else {
+        document.getElementById('status-bar').textContent = 'All cores are already aligned.';
     }
 }
+export function setDashVal(id, val, cls) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.textContent = val;
+        el.className = 'dash-val ' + (cls || '');
+    }
+}
+
 export function toggleBlockLock() {
     const obj = state.canvas.getActiveObject();
-    if(!obj || !obj.isServiceBlock) return;
-    
+    if (!obj || !obj.isServiceBlock) return;
+
     const isLocked = obj.lockScalingX;
     obj.set({ lockScalingX: !isLocked, lockScalingY: !isLocked });
-    
+
     const items = obj.getObjects();
-    if(items[2]) items[2].set('text', !isLocked ? "🔓" : "🔒"); // Visual toggle
-    
+    if (items[2]) items[2].set('text', !isLocked ? "🔓" : "🔒");
+
     obj.setCoords();
     state.canvas.requestRenderAll();
     updateSelectedObjectControls(obj);
 }
+
 export function toggleFloatingPanel() {
     const el = document.getElementById('floating-content');
     el.classList.toggle('minimized');
     document.getElementById('minimize-dash').textContent = el.classList.contains('minimized') ? '+' : '−';
 }
 
+
 export async function updateScreenshotGallery() {
     const container = document.getElementById('screenshot-gallery-container');
     container.innerHTML = '<p style="color:#888; font-size:0.9em; text-align:center;">Generating thumbnails...</p>';
 
-    const levelsToCapture = LEVEL_ORDER.filter(level => 
-        state.levels[level].objects.length > 0 || 
+    const levelsToCapture = LEVEL_ORDER.filter(level =>
+        state.levels[level].objects.length > 0 ||
         state.serviceBlocks.some(b => b.level === level)
     );
 
@@ -1314,7 +1959,7 @@ export async function updateScreenshotGallery() {
 
     const galleryItems = [];
     for (const level of levelsToCapture) {
-        const dataUrl = await captureLevelScreenshot(level, 0.2); // Generate small thumbnail
+        const dataUrl = await captureLevelScreenshot(level, 0.2);
         const card = document.createElement('div');
         card.className = 'screenshot-card';
         card.innerHTML = `
@@ -1326,7 +1971,359 @@ export async function updateScreenshotGallery() {
         `;
         galleryItems.push(card);
     }
-    
+
     container.innerHTML = '';
     galleryItems.forEach(item => container.appendChild(item));
+}
+
+export function initRatioAreaLinkage() {
+    const areaTypeMap = {
+        'allowedGfa': 'allowedGfa-ratio',
+        'allowedResidentialGfa': 'allowedResidentialGfa-ratio',
+        'allowedRetailGfa': 'allowedRetailGfa-ratio',
+        'allowedOfficeGfa': 'allowedOfficeGfa-ratio',
+        'allowedNurseryGfa': 'allowedNurseryGfa-ratio',
+        'allowedCommercialGfa': 'allowedCommercialGfa-ratio',
+        'allowedSupermarketGfa': 'allowedSupermarketGfa-ratio'
+    };
+
+    const getPlotArea = () => {
+        return state.plotPolygon ? getPolygonProperties(state.plotPolygon).area : 0;
+    };
+
+    document.querySelectorAll('.area-input-field').forEach(areaInput => {
+        areaInput.addEventListener('input', (e) => {
+            const areaId = e.target.id;
+            const ratioId = areaTypeMap[areaId];
+            if (!ratioId) return;
+
+            const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+            if (totalGfa > 0) {
+                const areaValue = parseFloat(e.target.value) || 0;
+                const ratioValue = (areaValue / totalGfa) * 100;
+                document.getElementById(ratioId).value = ratioValue.toFixed(2);
+            }
+
+            updateTargetGfaRatio();
+            updateAreaStatementPanel(state.lastCalculatedData);
+            handleCalculate(true);
+        });
+    });
+
+    document.querySelectorAll('.ratio-input-field').forEach(ratioInput => {
+        ratioInput.addEventListener('blur', (e) => {
+            const ratioId = e.target.id;
+            const areaId = ratioId.replace('-ratio', '');
+            if (!areaTypeMap[areaId]) return;
+
+            const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+            if (totalGfa > 0) {
+                const ratioValue = parseFloat(e.target.value) || 0;
+                if (ratioValue > 0) {
+                    const areaValue = (ratioValue / 100) * totalGfa;
+                    document.getElementById(areaId).value = areaValue.toFixed(2);
+                }
+            }
+
+            updateTargetGfaRatio();
+            updateAreaStatementPanel(state.lastCalculatedData);
+            handleCalculate(true);
+        });
+
+        ratioInput.addEventListener('input', (e) => {
+            const ratioId = e.target.id;
+            const areaId = ratioId.replace('-ratio', '');
+            if (!areaTypeMap[areaId]) return;
+
+            const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+            if (totalGfa > 0) {
+                const ratioValue = parseFloat(e.target.value) || 0;
+                if (ratioValue > 0) {
+                    const areaValue = (ratioValue / 100) * totalGfa;
+                    document.getElementById(areaId).placeholder = (areaValue).toFixed(2) + ' m²';
+                }
+            }
+        });
+    });
+}
+
+export function updateTargetGfaRatio() {
+    const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+    if (totalGfa <= 0) return;
+
+    const areaFields = ['allowedResidentialGfa', 'allowedRetailGfa', 'allowedOfficeGfa', 'allowedNurseryGfa', 'allowedCommercialGfa', 'allowedSupermarketGfa'];
+
+    areaFields.forEach(fieldId => {
+        const ratioId = fieldId + '-ratio';
+        const ratioInput = document.getElementById(ratioId);
+        if (ratioInput) {
+            const areaValue = parseFloat(document.getElementById(fieldId).value) || 0;
+            if (areaValue > 0 && totalGfa > 0) {
+                const ratio = (areaValue / totalGfa) * 100;
+                ratioInput.value = ratio.toFixed(2);
+            } else {
+                ratioInput.value = '';
+            }
+        }
+    });
+}
+
+export function updateFARDisplay() {
+    const farInput = document.getElementById('far-input');
+    const farCalculatedGfa = document.getElementById('far-calculated-gfa');
+    if (!farInput || !farCalculatedGfa) return;
+
+    const manualPlotArea = parseFloat(document.getElementById('manual-plot-area')?.value) || 0;
+    const polygonArea = state.plotPolygon ? getPolygonProperties(state.plotPolygon).area : 0;
+    const plotArea = manualPlotArea > 0 ? manualPlotArea : polygonArea;
+    const far = parseFloat(farInput.value) || 0;
+
+    if (far > 0 && plotArea > 0) {
+        const calculatedGfa = plotArea * far;
+        farCalculatedGfa.textContent = f(calculatedGfa) + ' m²';
+        farCalculatedGfa.style.color = '#2e7d32';
+    } else {
+        farCalculatedGfa.textContent = '—';
+        farCalculatedGfa.style.color = '#999';
+    }
+}
+
+export function initGFADistribution() {
+    const modeToggle = document.getElementById('gfa-distribution-mode-toggle');
+    const components = ['residential', 'retail', 'office', 'hotel', 'supermarket', 'nursery', 'commercial'];
+    const mapAreaToPercent = {
+        'residential': 'allowedResidentialGfa',
+        'retail': 'allowedRetailGfa',
+        'office': 'allowedOfficeGfa',
+        'hotel': 'allowedOfficeGfa',
+        'supermarket': 'allowedSupermarketGfa',
+        'nursery': 'allowedNurseryGfa',
+        'commercial': 'allowedCommercialGfa'
+    };
+
+    modeToggle.addEventListener('change', () => {
+        const isPercentMode = modeToggle.checked;
+        components.forEach(comp => {
+            const areaInput = document.getElementById(`gfa-dist-${comp}`);
+            const percentInput = document.getElementById(`gfa-dist-${comp}-pct`);
+
+            if (areaInput && percentInput) {
+                areaInput.readOnly = isPercentMode;
+                percentInput.readOnly = !isPercentMode;
+
+                if (isPercentMode) {
+                    areaInput.style.backgroundColor = '#f0f0f0';
+                    areaInput.style.cursor = 'default';
+                    percentInput.style.backgroundColor = '#fff';
+                    percentInput.style.cursor = 'text';
+                } else {
+                    areaInput.style.backgroundColor = '#fff';
+                    areaInput.style.cursor = 'text';
+                    percentInput.style.backgroundColor = '#f0f0f0';
+                    percentInput.style.cursor = 'default';
+                }
+            }
+        });
+    });
+
+    components.forEach(comp => {
+        const areaInput = document.getElementById(`gfa-dist-${comp}`);
+        const percentInput = document.getElementById(`gfa-dist-${comp}-pct`);
+
+        if (areaInput) {
+            areaInput.addEventListener('input', () => {
+                if (!modeToggle.checked) {
+                    const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+                    const areaValue = parseFloat(areaInput.value) || 0;
+                    if (totalGfa > 0 && percentInput) {
+                        const percValue = (areaValue / totalGfa) * 100;
+                        percentInput.value = percValue.toFixed(2);
+                    }
+                    updateGFADistributionTotal();
+                }
+            });
+        }
+
+        if (percentInput) {
+            percentInput.addEventListener('input', () => {
+                const totalGfa = parseFloat(document.getElementById('allowedGfa').value) || 0;
+                const percValue = parseFloat(percentInput.value) || 0;
+                if (totalGfa > 0) {
+                    const areaValue = (percValue / 100) * totalGfa;
+                    if (areaInput) {
+                        areaInput.value = areaValue > 0 ? areaValue.toFixed(2) : '';
+                    }
+                } else if (modeToggle.checked) {
+                    if (areaInput) {
+                        areaInput.value = '';
+                    }
+                }
+                updateGFADistributionTotal();
+            });
+        }
+    });
+
+    const applyBtn = document.getElementById('apply-gfa-distribution-btn');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+            let totalSum = 0;
+            components.forEach(comp => {
+                const areaInput = document.getElementById(`gfa-dist-${comp}`);
+                const fieldId = mapAreaToPercent[comp];
+                if (areaInput && fieldId) {
+                    const areaValue = parseFloat(areaInput.value) || 0;
+                    if (areaValue > 0) {
+                        document.getElementById(fieldId).value = areaValue.toFixed(2);
+                        totalSum += areaValue;
+                    }
+                }
+            });
+
+            updateTargetGfaRatio();
+            updateAreaStatementPanel(state.lastCalculatedData);
+            handleCalculate(true);
+            document.getElementById('status-bar').textContent = `✓ GFA distribution applied: Total ${f(totalSum)} m²`;
+        });
+    }
+
+    const clearBtn = document.getElementById('clear-gfa-distribution-btn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            components.forEach(comp => {
+                const areaInput = document.getElementById(`gfa-dist-${comp}`);
+                const percentInput = document.getElementById(`gfa-dist-${comp}-pct`);
+                if (areaInput) areaInput.value = '';
+                if (percentInput) percentInput.value = '';
+            });
+            updateGFADistributionTotal();
+            document.getElementById('status-bar').textContent = 'GFA distribution cleared';
+        });
+    }
+
+    modeToggle.dispatchEvent(new Event('change'));
+}
+
+function updateGFADistributionTotal() {
+    const components = ['residential', 'retail', 'office', 'hotel', 'supermarket', 'nursery', 'commercial'];
+    const modeToggle = document.getElementById('gfa-distribution-mode-toggle');
+    let total = 0;
+
+    components.forEach(comp => {
+        const inputId = modeToggle.checked ? `gfa-dist-${comp}-pct` : `gfa-dist-${comp}`;
+        const input = document.getElementById(inputId);
+        if (input) {
+            total += parseFloat(input.value) || 0;
+        }
+    });
+
+    const totalDisplay = document.querySelector('#gfa-dist-total span');
+    if (totalDisplay) {
+        if (modeToggle.checked) {
+            totalDisplay.textContent = total.toFixed(2) + '%';
+            totalDisplay.style.color = Math.abs(total - 100) < 0.1 ? '#9c27b0' : '#d32f2f';
+        } else {
+            totalDisplay.textContent = f(total) + ' m²';
+            totalDisplay.style.color = '#9c27b0';
+        }
+    }
+}
+
+export function initPdfAndAlignmentTools() {
+    const importZipBtn = document.getElementById('import-zip-btn');
+    const zipInput = document.getElementById('zip-file-input');
+
+    if (importZipBtn && zipInput) {
+        importZipBtn.addEventListener('click', () => zipInput.click());
+        zipInput.addEventListener('change', async (e) => {
+            if (e.target.files[0]) {
+                const io = await import('./io.js');
+                await io.handleZipUpload(e.target.files[0]);
+                e.target.value = '';
+            }
+        });
+    }
+
+    const alignScaleBtn = document.getElementById('align-scale-tool-btn');
+    if (alignScaleBtn) {
+        alignScaleBtn.addEventListener('click', async () => {
+            const tools = await import('./drawingTools.js');
+            tools.activateAlignScaleTool();
+        });
+    }
+
+    const moveOriginBtn = document.getElementById('move-origin-tool-btn');
+    if (moveOriginBtn) {
+        moveOriginBtn.addEventListener('click', async () => {
+            const tools = await import('./drawingTools.js');
+            tools.activateMoveOriginTool();
+        });
+    }
+
+    const scaleGeometryBtn = document.getElementById('scale-geometry-btn');
+    if (scaleGeometryBtn) {
+        scaleGeometryBtn.addEventListener('click', async () => {
+            const tools = await import('./drawingTools.js');
+            tools.activateScaleGeometryTool();
+        });
+    }
+
+    const pdfScaleDoneBtn = document.getElementById('pdf-scale-done-btn');
+    if (pdfScaleDoneBtn) {
+        pdfScaleDoneBtn.addEventListener('click', async () => {
+            const io = await import('./io.js');
+            io.closePdfScalingDialog();
+        });
+    }
+
+    const useAlignToolBtn = document.getElementById('use-align-tool-btn');
+    if (useAlignToolBtn) {
+        useAlignToolBtn.addEventListener('click', async () => {
+            const io = await import('./io.js');
+            io.closePdfScalingDialog();
+            const tools = await import('./drawingTools.js');
+            tools.activateAlignScaleTool();
+        });
+    }
+
+    const opacitySlider = document.getElementById('pdf-opacity-slider');
+    if (opacitySlider) {
+        opacitySlider.addEventListener('input', async (e) => {
+            const io = await import('./io.js');
+            io.updatePdfOpacity(e.target.value);
+        });
+    }
+
+    const exportGeomBtn = document.getElementById('export-geometry-csv-btn');
+    if (exportGeomBtn) {
+        exportGeomBtn.addEventListener('click', async () => {
+            const io = await import('./io.js');
+            io.exportGeometryCSV();
+        });
+    }
+
+    const importGeomUpload = document.getElementById('import-geometry-csv-upload');
+    if (importGeomUpload) {
+        importGeomUpload.addEventListener('change', async (e) => {
+            if (!e.target.files[0]) return;
+            const io = await import('./io.js');
+            io.importGeometryCSV(e.target.files[0]);
+        });
+    }
+}
+export async function updateSessionList() {
+    const select = document.getElementById('load-session-select');
+    if (!select) return;
+
+    const names = await getSavedSessionNames();
+    // Keep the first option
+    const firstOption = select.options[0];
+    select.innerHTML = '';
+    select.appendChild(firstOption);
+
+    names.sort().reverse().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
 }
