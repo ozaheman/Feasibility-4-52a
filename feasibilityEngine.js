@@ -1,6 +1,7 @@
 //--- START OF FILE feasibilityEngine.js ---
 
 import { state, setCurrentMode, setScale } from './state.js';
+import { updateCompositePreview } from './dyn_composite_block.js';
 import { getPolygonProperties, getPolygonBoundingBox, allocateCountsByPercent } from './utils.js';
 import { generateLinearParking } from './parkingLayoutUtils.js';
 import { layoutFlatsOnPolygon, validateStaircaseDistance } from './apartmentLayout.js';
@@ -88,7 +89,85 @@ export function getLastPodiumAreaPolygone(levelName = 'Podium_Last') {
     return state.levels[levelName]?.objects.filter(o => o.isFootprint).reduce((sum, obj) => sum + getPolygonProperties(obj).area, 0) || 0;
 }
 
+// --- NEW DYNAMIC ENHANCEMENTS ---
+
+function updateRoofGymSize() {
+    const gymBlock = state.serviceBlocks.find(b => 
+        b.level === 'Roof' && 
+        b.blockData && 
+        b.blockData.name.toLowerCase().includes('gym')
+    );
+
+    if (!gymBlock || state.scale.ratio === 0) return;
+
+    const typicalArea = getAreaForLevel('Typical_Floor');
+    if (typicalArea === 0) return;
+
+    const targetRoofCoreArea = typicalArea * 0.5;
+    
+    // Calculate other core blocks area on Roof
+    const flatBlocks = getFlattenedBlocks();
+    const otherCoreArea = flatBlocks
+        .filter(fb => 
+            fb.level === 'Roof' && 
+            fb.block.blockData && 
+            (fb.block.blockData.category === 'gfa' || fb.block.blockData.category === 'service' || fb.block.blockData.category === 'builtup') &&
+            !fb.block.blockData.name.toLowerCase().includes('gym')
+        )
+        .reduce((sum, fb) => sum + (fb.width * fb.absScaleX * fb.height * fb.absScaleY * (state.scale.ratio ** 2)), 0);
+
+    const requiredGymArea = Math.max(0, targetRoofCoreArea - otherCoreArea);
+    
+    const gymWidthMeters = 20; // Constant as requested for convenience
+    const gymHeightMeters = requiredGymArea / gymWidthMeters;
+
+    // Update fabric object
+    const rect = gymBlock.getObjects('rect')[0];
+    if (rect) {
+        gymBlock.set({
+            scaleX: (gymWidthMeters / state.scale.ratio) / rect.width,
+            scaleY: (gymHeightMeters / state.scale.ratio) / rect.height,
+        });
+        gymBlock.setCoords();
+        state.canvas.requestRenderAll();
+    }
+}
+
+function updateCompositeBlockLabels(liftsReq, stairsReq) {
+    const flatBlocks = getFlattenedBlocks();
+    state.serviceBlocks.forEach(b => {
+        if (b.isCompositeGroup) {
+            b.getObjects().forEach(sub => {
+                if (sub.isServiceBlock && sub.blockData) {
+                    const name = sub.blockData.name.toLowerCase();
+                    const textObj = sub.getObjects('text').find(t => t.text !== "🔒");
+                    if (textObj) {
+                        if (name.includes('lift') && !name.includes('corridor')) {
+                             const provided = flatBlocks.filter(fb => 
+                                 fb.level === b.level && 
+                                 fb.block.blockData && 
+                                 fb.block.blockData.name.toLowerCase().includes('lift') && 
+                                 !fb.block.blockData.name.toLowerCase().includes('corridor')
+                             ).length;
+                             textObj.set('text', `Lift (${liftsReq}/${provided})`);
+                        } else if (sub.blockData.role === 'staircase') {
+                             const provided = flatBlocks.filter(fb => 
+                                 fb.level === b.level && 
+                                 fb.block.blockData && 
+                                 fb.block.blockData.role === 'staircase'
+                             ).length;
+                             textObj.set('text', `Stair (${stairsReq}/${provided})`);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    state.canvas.requestRenderAll();
+}
+
 export function performCalculations() {
+    updateRoofGymSize();
     const typicalFootprints = state.levels['Typical_Floor'].objects.filter(o => o.isFootprint);
     const hotelFootprints = state.levels['Hotel'].objects.filter(o => o.isFootprint);
 
@@ -692,7 +771,24 @@ export function performCalculations() {
 
     // NEW: Staircase Calculation
     const stairsRequired = state.currentProgram?.calculateStaircases ? state.currentProgram.calculateStaircases(totalOccupancy) : 2;
-   const stairsProvided = flatBlocks.filter(fb => fb.level === 'Typical_Floor' && fb.block.blockData?.role === 'staircase').length;
+    const stairsProvided = flatBlocks.filter(fb => fb.level === 'Typical_Floor' && fb.block.blockData?.role === 'staircase').length;
+
+    updateCompositeBlockLabels(liftsRequired, stairsRequired);
+
+    const requirements = {
+        'Lift_Typical_2.4_2.4': liftsRequired,
+        'Comm_Staircase_Typical_6_3': stairsRequired,
+        'Electrical_Room_3_3': 1,
+        'Garbage_Room_8_1': 1,
+        'Comm_Water_Meter_4_1': 1,
+        'Pump_Room_8.5_8': 1,
+        'Telephone_Room_5.1_4': 1,
+        'ETS_Room_9_9': 1,
+        'LV_Room_5.1_8.6': 1,
+        'GSM_Room_3_3': 1,
+        'Control_Room_19_1': 1
+    };
+    updateCompositePreview(requirements);
 
     const providedBreakdown = [];
     LEVEL_ORDER.forEach(levelKey => {

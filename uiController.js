@@ -9,6 +9,7 @@ import { layoutFlatsOnPolygon } from './apartmentLayout.js';
 import { exportMarketRatesXML, importMarketRatesXML, updateDxfLayerProperty, getSavedSessionNames } from './io.js';
 
 import { recordAction } from './actionRecorder.js';
+import { syncPlacementData } from './dyn_composite_block.js';
 export function renderDxfLayersSidebar() {
     const container = document.getElementById('dxf-layers-container');
     if (!container) return;
@@ -292,14 +293,18 @@ export function updateUI() {
     document.getElementById('footprint-from-setbacks-btn').disabled = !hasPlot;
     document.getElementById('footprint-from-plot-btn').disabled = !hasPlot;
 
-    document.getElementById('add-block-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
-    document.getElementById('place-composite-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
-    document.getElementById('draw-parking-btn').disabled = !scaleSet || !hasAnyFootprint || window.isEditingGroup;
+    document.getElementById('add-block-btn').disabled = !scaleSet || window.isEditingGroup;
+    document.getElementById('place-composite-btn').disabled = !scaleSet || window.isEditingGroup;
+    const drawFromPreviewBtn = document.getElementById('draw-from-preview-btn');
+    if (drawFromPreviewBtn) {
+        drawFromPreviewBtn.disabled = !scaleSet || window.isEditingGroup || (drawFromPreviewBtn.getAttribute('data-has-reqs') !== 'true');
+    }
+    document.getElementById('draw-parking-btn').disabled = !scaleSet || !(hasPlot || hasAnyFootprint) || window.isEditingGroup;
 
     const validParkingLevel = ['Basement', 'Ground_Floor', 'Podium'].includes(state.currentLevel);
     document.getElementById('draw-parking-on-edge-btn').disabled = !scaleSet || !(hasFootprintOnCurrentLevel || (validParkingLevel && hasPlot)) || window.isEditingGroup;
-    document.getElementById('draw-bus-bay-btn').disabled = !scaleSet || !hasAnyFootprint;
-    document.getElementById('draw-loading-bay-btn').disabled = !scaleSet || !hasAnyFootprint;
+    document.getElementById('draw-bus-bay-btn').disabled = !scaleSet || !(hasPlot || hasAnyFootprint);
+    document.getElementById('draw-loading-bay-btn').disabled = !scaleSet || !(hasPlot || hasAnyFootprint);
 
     document.getElementById('calculateBtn').disabled = !hasPlot || !hasCalculableFootprint;
     document.getElementById('generateDetailedReportBtn').disabled = !hasPlot || !hasCalculableFootprint;
@@ -586,6 +591,7 @@ export function populateCompositeBlocks() {
         select.appendChild(option);
     });
     if (selectedValue) select.value = selectedValue;
+    select.dispatchEvent(new Event('change'));
     updateUI();
 }
 
@@ -1091,8 +1097,8 @@ export function saveUnitChanges() {
 }
 
 export function placeSelectedComposite() {
-    const index = document.getElementById('composite-block-select').value;
-    if (index !== null && state.userCompositeBlocks[index]) {
+    syncPlacementData();
+    if (window.selectedCompositeBlockData) {
         enterMode('placingCompositeBlock');
     }
 }

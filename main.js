@@ -41,6 +41,7 @@ import { init3D } from './viewer3d.js';
 import { setupEventListeners } from './eventHandlers.js';
 import { resetState, state } from './state.js';
 import { loadFromAutosave, autosaveToLocalStorage } from './io.js';
+import { initCompositePreview } from './dyn_composite_block.js';
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,6 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     init3D();
     initUI();
     setupEventListeners();
+    initCompositePreview();
     resetState();
 
     const canvas = getCanvas();

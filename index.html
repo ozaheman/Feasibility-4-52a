@@ -528,11 +528,11 @@
                     <tr style="background-color:#f5f5f5; font-weight:bold;">
                         <th style="padding:8px; text-align:left; border-bottom:2px solid #ccc; width:25%;">Area Type
                         </th>
-                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc; width:25%;">Area Input
+                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc; width:45%;">Area Input
                             (m²)</th>
                         <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc; width:25%;">% of Total
                             GFA</th>
-                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc; width:25%;"></th>
+                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ccc; width:5%;"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -742,6 +742,16 @@
         <div class="control-group">
             <h3>7. Composite Blocks</h3>
             <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Manage and place building cores.</p>
+            
+            <div id="composite-preview-wrapper" style="margin-bottom: 15px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+                <h4 style="margin-top: 0; font-size: 0.9em;">Core Requirements Preview</h4>
+                <div id="composite-preview-container" style="display: flex; gap: 10px; overflow-x: auto; padding-top: 25px; min-height: 100px; position: relative;">
+                    <!-- Blocks will be rendered here dynamically -->
+                    <p style="color: #999; font-size: 0.8em; text-align: center; width: 100%;">Calculate to see requirements</p>
+                </div>
+                <button id="draw-from-preview-btn" disabled style="margin-top: 10px; font-size: 0.9em; padding: 8px;">Draw Composite Object</button>
+            </div>
+
             <label for="composite-block-select">Select Core</label>
             <select id="composite-block-select" style="margin-bottom: 5px;"></select>
             <button id="place-composite-btn" disabled>Place Selected Core</button>
@@ -1199,6 +1209,7 @@
     }
 </script>
     <script type="module" src="main.js"></script>
+    <script type="module" src="dyn_composite_block.js"></script>
 
 </body>
 

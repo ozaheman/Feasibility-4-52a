@@ -4,7 +4,7 @@
 // =====================================================================
 import { initCanvas, resetZoom, renderPdfToBackground, zoomCanvas, getCanvas, clearOverlay, setCanvasBackground, getOverlayContext, redrawApartmentPreview, zoomToObject, drawLiveDimension } from './canvasController.js';
 import { resetState, setCurrentLevel, state, setCurrentMode, setScale, toggleAllLayersVisibility, rehydrateProgram } from './state.js';
-import { initDrawingTools, handleDblClick, getSetbackPolygonPoints, handleCanvasMouseMove, clearSetbackGuides, clearEdgeHighlight, updateAlignmentHighlight, resetDrawingState, handleCanvasMouseDown, clearEdgeSnapIndicator, finishScaling, drawSetbackGuides, findSnapPoint, updateSnapIndicators, drawMeasurement, getClickedPlotEdge, findNearestParkingEdge, getNearestEdge, snapObjectToEdge, alignObjectToEdge, updateEdgeHighlight, getClickedPolygonEdge, makeFootprintEditable, makeFootprintUneditable, makeParkingEditable, makeParkingUneditable, refreshEditablePolygon, addDrawingPoint, handleAlignmentPointSelect, activateAlignScaleTool, activateScaleGeometryTool, activateMoveOriginTool } from './drawingTools.js';
+import { initDrawingTools, handleDblClick, getSetbackPolygonPoints, handleCanvasMouseMove, clearSetbackGuides, clearEdgeHighlight, updateAlignmentHighlight, resetDrawingState, handleCanvasMouseDown, clearEdgeSnapIndicator, finishScaling, drawSetbackGuides, findSnapPoint, updateSnapIndicators, drawMeasurement, getClickedPlotEdge, findNearestParkingEdge, getNearestEdge, snapObjectToEdge, alignObjectToEdge, updateEdgeHighlight, getClickedPolygonEdge, makeFootprintEditable, makeFootprintUneditable, makeParkingEditable, makeParkingUneditable, refreshEditablePolygon, addDrawingPoint, handleAlignmentPointSelect, activateAlignScaleTool, activateScaleGeometryTool, activateMoveOriginTool, placeServiceBlock, createCompositeGroup } from './drawingTools.js';
 import { regenerateParkingInGroup, generateLinearParking } from './parkingLayoutUtils.js';
 import { init3D, generate3DBuilding, generateOpenScadScript } from './viewer3d.js';
 import { initUI, updateUI, displayHotelRequirements, renderDxfLayersSidebar, placeSelectedComposite, handleConfirmLevelOp, applyLevelVisibility, updateLevelFootprintInfo, renderServiceBlockList, updateSelectedObjectControls, updateBlockLockUI, openLevelOpModal, updateParkingDisplay, toggleFloatingPanel, updateDashboard, toggleBlockLock, saveUnitChanges, openNewCompositeEditor, editSelectedComposite, deleteSelectedComposite, saveCompositeChanges, addSubBlockToCompositeEditor, applyScenario, toggleApartmentMode, openEditUnitModal, updateLevelCounts, populateServiceBlocksDropdown, updateProgramUI, updateMixTotal, updateScreenshotGallery, openAreaStatementModal, updateAreaStatementPanel, updateFARDisplay, updateSessionList, openDxfLayerSelector, closeDxfLayerSelector, applyDxfLayerVisibilityFromModal, setAllDxfLayerCheckboxes, openLevelSelector, closeLevelSelector, applyLevelSelectionFromModal, setAllLevelCheckboxes } from './uiController.js';
@@ -172,7 +172,22 @@ export function setupEventListeners() {
     state.canvas.on('mouse:down', handleMouseDown);
     state.canvas.on('mouse:move', handleMouseMove);
     state.canvas.on('mouse:up', handleMouseUp);
-    state.canvas.on('mouse:dblclick', handleDblClick);
+    state.canvas.on('mouse:dblclick', (o) => {
+        if (o.target && (o.target.isCompositeGroup || o.target.isServiceBlock)) {
+            if (o.target.isCompositeGroup) {
+                const defName = o.target.compositeDefName;
+                const index = state.userCompositeBlocks.findIndex(b => b.name === defName);
+                if (index !== -1) {
+                    document.getElementById('composite-block-select').value = index;
+                }
+                editSelectedComposite();
+            } else {
+                updateSelectedObjectControls(o.target);
+            }
+        } else {
+            handleDblClick(o);
+        }
+    });
     state.canvas.on('after:render', handleAfterRender);
 
     state.canvas.on('selection:created', (e) => {
@@ -673,7 +688,7 @@ export function handleBlockTypeChange(e) {
         updateUI();
     }
 }
-export function placeServiceBlock(pointer) {
+export function placeServiceBlockFromUI(pointer) {
     const selectEl = document.getElementById('serviceBlockType');
     Array.from(selectEl.selectedOptions).forEach(option => {
         const blockData = PREDEFINED_BLOCKS[option.value];
@@ -707,37 +722,6 @@ export function placeServiceBlock(pointer) {
         group.setCoords();
     });
     setCurrentMode(null);
-    renderServiceBlockList();
-}
-export function createCompositeGroup(compositeData, pointer) {
-    if (!compositeData || state.scale.ratio === 0) return;
-    const items = [];
-    const compositeLevel = compositeData.level || state.currentLevel;
-    compositeData.blocks.forEach(blockDef => {
-        const blockData = PREDEFINED_BLOCKS[blockDef.key];
-        if (!blockData) return;
-        const blockWidth = (blockDef.w ?? blockData.width) / state.scale.ratio;
-        const blockHeight = (blockDef.h ?? blockData.height) / state.scale.ratio;
-        const colors = BLOCK_CATEGORY_COLORS[blockData.category || 'default'];
-        const blockId = `SB-${state.serviceBlockCounter++}`;
-        const rect = new fabric.Rect({ width: blockWidth, height: blockHeight, fill: colors.fill, stroke: colors.stroke, strokeWidth: 2, originX: 'center', originY: 'center', strokeUniform: true });
-        const label = new fabric.Text(blockId, { fontSize: Math.min(blockWidth, blockHeight) * 0.2, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center' });
-
-        const x_px = (blockDef.x || 0) / state.scale.ratio;
-        const y_px = (blockDef.y || 0) / state.scale.ratio;
-
-        const subGroup = new fabric.Group([rect, label], {
-            isServiceBlock: true, blockData, blockId: blockId, level: compositeLevel,
-            left: x_px + blockWidth / 2, top: y_px + blockHeight / 2,
-            selectable: false, evented: false
-        });
-
-        state.serviceBlocks.push(subGroup);
-        items.push(subGroup);
-    });
-    const compositeGroup = new fabric.Group(items, { left: pointer.x, top: pointer.y, level: compositeLevel, isCompositeGroup: true });
-    state.canvas.add(compositeGroup);
-    applyLevelVisibility();
     renderServiceBlockList();
 }
 
@@ -1093,10 +1077,42 @@ export function handleToggleVisibility() {
     applyLevelVisibility();
 }
 
+function ensureRetailFacilitiesOnGround(data) {
+    if (!data || state.projectType !== 'Residential') return;
+    
+    const retailGfa = data.areas.achievedRetailGfa || 0;
+    if (retailGfa <= 0) return;
+
+    // Check if we already have the necessary blocks on Ground Floor
+    const groundBlocks = state.serviceBlocks.filter(b => b.level === 'Ground_Floor');
+    const hasToilet = groundBlocks.some(b => b.blockData && b.blockData.name === "Retail Toilet");
+    const hasAccToilet = groundBlocks.some(b => b.blockData && b.blockData.name === "Retail Accessible Toilet");
+
+    if (!hasToilet || !hasAccToilet) {
+        const groundFootprint = state.levels['Ground_Floor']?.objects.find(o => o.isFootprint);
+        let pos;
+        if (groundFootprint) {
+            pos = groundFootprint.getCenterPoint();
+        } else {
+            pos = state.plotPolygon ? state.plotPolygon.getCenterPoint() : { x: 500, y: 500 };
+        }
+
+        if (!hasToilet) {
+            placeServiceBlock({ x: pos.x - 30, y: pos.y }, "Retail_Toilet_2.4_1.5", "Ground_Floor");
+        }
+        if (!hasAccToilet) {
+            placeServiceBlock({ x: pos.x + 30, y: pos.y }, "Retail_Accessible_Toilet_2.4_1.5", "Ground_Floor");
+        }
+        
+        document.getElementById('status-bar').textContent = `Automatically added Retail Facilities based on ${retailGfa.toFixed(0)}m² Retail GFA.`;
+    }
+}
+
 export function handleCalculate(isLiveUpdate = false, isDetailed = false) {
     const reportResult = generateReport(isDetailed);
     if (reportResult) {
         state.lastCalculatedData = reportResult.data;
+        ensureRetailFacilitiesOnGround(reportResult.data);
         document.getElementById('report-container').innerHTML = reportResult.html;
         updateParkingDisplay();
         updateScreenshotGallery();
@@ -1333,13 +1349,13 @@ export function handleMouseDown(o) {
         alert('finish Polyline');
         handleFinishPolyline(result.polyline);
     }
-    if (state.currentMode === 'placingBlock') placeServiceBlock(pointer);
+    if (state.currentMode === 'placingBlock') placeServiceBlockFromUI(pointer);
     if (state.currentMode === 'placingCompositeBlock') {
-        const index = document.getElementById('composite-block-select').value;
-        const data = state.userCompositeBlocks[index];
+        const data = window.selectedCompositeBlockData;
         if (data) {
             createCompositeGroup(data, pointer);
         }
+        window.selectedCompositeBlockData = null; // Clear after use
         exitAllModes();
     }
     if (state.currentMode === 'drawingParking') {
@@ -1384,6 +1400,19 @@ export function handleMouseMove(o) {
 
 
 export function handleMouseUp(o) {
+    if (state.currentMode === 'placingCompositeBlock' && window.isDraggingFromPreview) {
+        const pointer = state.canvas.getPointer(o.e);
+        const data = window.selectedCompositeBlockData;
+        if (data) {
+            createCompositeGroup(data, pointer);
+        }
+        window.isDraggingFromPreview = false;
+        window.selectedCompositeBlockData = null;
+        exitAllModes();
+        state.canvas.requestRenderAll();
+        return;
+    }
+
     if (state.currentMode === 'drawingGuide' && guideLine) {
         const finalGuide = new fabric.Line([guideLine.x1, guideLine.y1, guideLine.x2, guideLine.y2], {
             stroke: guideLine.stroke, strokeWidth: guideLine.strokeWidth, strokeDashArray: guideLine.strokeDashArray,
@@ -1400,6 +1429,11 @@ export function handleMouseUp(o) {
         exitAllModes();
     }
     clearEdgeSnapIndicator();
+    
+    // Safety reset for drag flag
+    if (window.isDraggingFromPreview) {
+        window.isDraggingFromPreview = false;
+    }
 }
 export function handleAfterRender() {
     clearOverlay();
@@ -1407,6 +1441,55 @@ export function handleAfterRender() {
     const layoutToDraw = state.livePreviewLayout || state.currentApartmentLayout;
     if (layoutToDraw) {
         redrawApartmentPreview(layoutToDraw);
+    }
+
+    // GHOST PREVIEW for Service Blocks
+    if (state.currentMode === 'placingBlock' && state.lastMousePointer) {
+        const key = document.getElementById('serviceBlockType')?.value;
+        const blockData = PREDEFINED_BLOCKS[key];
+        if (blockData && state.scale.ratio > 0) {
+            const vpt = state.canvas.viewportTransform;
+            const ctx = getOverlayContext();
+            ctx.save();
+            ctx.setTransform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+            const bw = blockData.width / state.scale.ratio;
+            const bh = blockData.height / state.scale.ratio;
+            ctx.translate(state.lastMousePointer.x, state.lastMousePointer.y);
+            ctx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.lineWidth = 1 / state.canvas.getZoom();
+            ctx.fillRect(-bw/2, -bh/2, bw, bh);
+            ctx.strokeRect(-bw/2, -bh/2, bw, bh);
+            ctx.restore();
+        }
+    }
+
+    // GHOST PREVIEW for Composite Blocks
+    if (state.currentMode === 'placingCompositeBlock' && state.lastMousePointer) {
+        const data = window.selectedCompositeBlockData || state.userCompositeBlocks[document.getElementById('composite-block-select').value];
+        if (data && state.scale.ratio > 0) {
+            const vpt = state.canvas.viewportTransform;
+            const ctx = getOverlayContext();
+            ctx.save();
+            ctx.setTransform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+            ctx.translate(state.lastMousePointer.x, state.lastMousePointer.y);
+            
+            data.blocks.forEach(b => {
+                const blockData = PREDEFINED_BLOCKS[b.key];
+                if (!blockData) return;
+                const bw = (b.w || blockData.width) / state.scale.ratio;
+                const bh = (b.h || blockData.height) / state.scale.ratio;
+                const bx = (b.x || 0) / state.scale.ratio;
+                const by = (b.y || 0) / state.scale.ratio;
+                
+                ctx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+                ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                ctx.lineWidth = 1 / state.canvas.getZoom();
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.strokeRect(bx, by, bw, bh);
+            });
+            ctx.restore();
+        }
     }
 
     if (state.liveDimensionLine) {

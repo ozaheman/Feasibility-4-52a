@@ -877,7 +877,15 @@ export function createCompositeGroup(compositeData, pointer) {
     const items = [];
     const compositeLevel = compositeData.level || state.currentLevel;
     compositeData.blocks.forEach(blockDef => {
-        const blockData = PREDEFINED_BLOCKS[blockDef.key];
+        let blockData = PREDEFINED_BLOCKS[blockDef.key];
+        
+        // Match dyn_composite_block.js's robustness: try to find by lowercase if exact match fails
+        if (!blockData) {
+            const lowerKey = blockDef.key.toLowerCase();
+            const foundKey = Object.keys(PREDEFINED_BLOCKS).find(k => k.toLowerCase() === lowerKey);
+            if (foundKey) blockData = PREDEFINED_BLOCKS[foundKey];
+        }
+
         if (!blockData) return;
         const blockWidth = (blockDef.w ?? blockData.width) / state.scale.ratio;
         const blockHeight = (blockDef.h ?? blockData.height) / state.scale.ratio;
@@ -895,10 +903,16 @@ export function createCompositeGroup(compositeData, pointer) {
             selectable: false, evented: false
         });
 
-        state.serviceBlocks.push(subGroup);
         items.push(subGroup);
     });
-    const compositeGroup = new fabric.Group(items, { left: pointer.x, top: pointer.y, level: compositeLevel, isCompositeGroup: true, compositeDefName: compositeData.name });
+    const compositeGroup = new fabric.Group(items, { 
+        left: pointer.x, 
+        top: pointer.y, 
+        level: compositeLevel, 
+        isCompositeGroup: true, 
+        compositeDefName: compositeData.name 
+    });
+    state.serviceBlocks.push(compositeGroup);
     state.canvas.add(compositeGroup);
     return compositeGroup;
 }
