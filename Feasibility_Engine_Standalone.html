@@ -1076,13 +1076,13 @@ p.status-indicator {
     margin-bottom: 0;
 }
 
-.collapsible-header span {
+.collapsible-header .panel-toggle-indicator {
     transition: transform 0.3s ease;
     font-size: 1.2em;
     font-weight: bold;
 }
 
-.collapsible-header.collapsed span {
+.collapsible-header.collapsed .panel-toggle-indicator {
     transform: rotate(-90deg);
 }
 
@@ -1157,8 +1157,8 @@ input.source-local {
 
     <div class="sidebar">
         <h1>Feasibility Engine</h1>
-        <div class="control-group">
-            <h3>1. Project I/O</h3>
+        <div class="control-group"><h3 class="collapsible-header">1. Project I/O <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom: 10px;">
                 <label for="zip-upload" class="button warning"
                     style="text-align:center; padding: 0; margin:0; cursor:pointer; display:flex; align-items:center; justify-content:center; height:45px; line-height:1.2;">Import
@@ -1190,9 +1190,9 @@ input.source-local {
                         onchange="window.handleImportSessionJSONFile(event)">
                 </label>
             </div>
-        </div>
-        <div class="control-group">
-            <h3>2. Site Plan & Scale</h3>
+        </div></div>
+        <div class="control-group"><h3 class="collapsible-header">2. Site Plan & Scale <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <div class="button-grid" style="margin-bottom:10px;">
                 <label for="plan-upload" class="button"
                     style="text-align:center; padding: 12px 0; margin-top:0; cursor:pointer;">Upload Plan</label>
@@ -1213,8 +1213,8 @@ input.source-local {
             <div id="scale-display" style="font-size:0.8em; margin-top:5px;">Scale not set.</div>
 
             <button id="reset-geometry-btn" class="danger" style="margin-top:10px;"
-                title="Clears every drawn shape (plot, footprints, parking, blocks, guides, DXF overlay) on every level/scenario, but keeps the loaded PDF/image and the scale you set. This is the only action that clears geometry - reloading a plan never does.">
-                ⟲ Reset All Geometry (Keep PDF &amp; Scale)
+                title="Clears every footprint, parking row, block, and guide on every level/scenario, but keeps the loaded PDF/image, the scale you set, AND the plot boundary. This is the only action that clears geometry - reloading a plan never does.">
+                ⟲ Reset Geometry (Keep PDF, Scale &amp; Plot)
             </button>
 
             <div id="dxf-controls"
@@ -1243,10 +1243,30 @@ input.source-local {
 
                 <button id="delete-dxf-btn" class="danger" style="margin-top:5px;">Delete DXF Overlay</button>
             </div>
-        </div>
+        </div></div>
 
-        <div class="control-group" id="scenario-panel">
-            <h3>2b. Scenario Studies</h3>
+        <div class="control-group" id="plot-boundary-panel"><h3 class="collapsible-header"><span>3. Plot Boundary <span style="font-weight:normal; font-size:0.75em; color:#666;">(one-time setup)</span></span> <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
+            <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">
+                Trace the plot boundary once. It's shared across every scenario tab and survives
+                "Reset All Geometry" - you only redraw it if the boundary itself is actually wrong.
+            </p>
+            <button id="draw-plot-btn" disabled>Draw Plot Polygon</button>
+            <button id="edit-plot-btn" class="warning" style="display:none;">Edit Plot Shape</button>
+            <button id="confirm-plot-edit-btn" style="display:none;" class="active">✓ Confirm Plot Edit</button>
+            <div id="plot-info" style="font-size:0.8em; margin-top:10px; border-top: 1px solid #eee; padding-top: 5px;">
+            </div>
+            <div id="manual-plot-wrapper" style="margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;">
+                <label style="margin-bottom:2px; font-size:0.85em;">Manual Plot Override (Optional)</label>
+                <div class="input-grid">
+                    <input type="number" id="manual-plot-area" placeholder="Area (m²)" class="param-input">
+                    <input type="number" id="manual-plot-perim" placeholder="Perim (m)" class="param-input">
+                </div>
+            </div>
+        </div></div>
+
+        <div class="control-group" id="scenario-panel"><h3 class="collapsible-header">4. Scenario Studies <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">
                 Each tab is a separate massing/parking study on the <b>same</b> base PDF and scale.
                 Switching tabs swaps the drawn geometry only - the background plan and scale never change.
@@ -1258,10 +1278,10 @@ input.source-local {
                 <button id="delete-scenario-btn" class="danger">Delete</button>
             </div>
             <button id="compare-scenarios-btn" class="active" style="margin-top:8px;">Generate Comparison Report (All Scenarios)</button>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>3. Level Management</h3>
+        <div class="control-group"><h3 class="collapsible-header">5. Level Management <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <div class="button-grid-3" id="level-selector">
                 <!-- Buttons will be populated by JS -->
             </div>
@@ -1269,14 +1289,10 @@ input.source-local {
                 <button id="toggle-visibility-btn" class="warning">Show All Layers</button>
                 <button id="select-levels-btn" class="active">Selected Layer</button>
             </div>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>4. Drawing Tools</h3>
-            <button id="draw-plot-btn" disabled>Draw Plot Polygon</button>
-            <button id="edit-plot-btn" class="warning" style="display:none;">Edit Plot Shape</button>
-            <button id="confirm-plot-edit-btn" style="display:none;" class="active">✓ Confirm Plot Edit</button>
-
+        <div class="control-group"><h3 class="collapsible-header">6. Footprint &amp; Building Drawing Tools <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <button id="measure-tool-btn" disabled>Measure Distance</button>
             <button id="draw-guide-btn" disabled>Draw Guide</button>
             <button id="edit-setbacks-btn" disabled>Edit Individual Setbacks</button>
@@ -1352,14 +1368,12 @@ input.source-local {
             <div style="font-size: 0.9em; margin-top: 5px;">
                 <label><input type="checkbox" id="auto-close-preview-check"> Auto-close Polygon Preview</label>
             </div>
-            <div id="plot-info" style="font-size:0.8em; margin-top:10px; border-top: 1px solid #eee; padding-top: 5px;">
-            </div>
             <div id="level-footprint-info" style="font-size:0.8em; margin-top:5px;"></div>
             <div id="corridor-info" style="font-size:0.8em; margin-top:5px; display:none;"></div>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>PDF & Geometry Tools</h3>
+        <div class="control-group"><h3 class="collapsible-header">7. PDF & Geometry Tools <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
 
             <button id="import-zip-btn"
                 style="width:100%; padding:8px; margin-bottom:10px; background-color:#2196F3; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
@@ -1398,7 +1412,7 @@ input.source-local {
             <div id="tool-panel-content"
                 style="min-height:80px; background-color:white; padding:10px; border-radius:4px; border:1px solid #e0e0e0; font-size:0.9em; color:#666;">
             </div>
-        </div>
+        </div></div>
 
         <div id="pdf-alignment-modal"
             style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background-color:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center;">
@@ -1473,7 +1487,7 @@ input.source-local {
         </div>
 
         <div class="control-group">
-            <h3 class="collapsible-header collapsed">Market Rate Analysis <span>+</span></h3>
+            <h3 class="collapsible-header collapsed">Market Rate Analysis <span class="panel-toggle-indicator">+</span></h3>
             <div class="collapsible-content collapsed">
                 <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Get simulated market rates for a
                     selected Dubai community.</p>
@@ -1511,15 +1525,8 @@ input.source-local {
             </div>
         </div>
 
-        <div id="manual-plot-wrapper">
-            <label style="margin-bottom:2px; font-size:0.85em;">Manual Plot Override (Optional)</label>
-            <div class="input-grid">
-                <input type="number" id="manual-plot-area" placeholder="Area (m²)" class="param-input">
-                <input type="number" id="manual-plot-perim" placeholder="Perim (m)" class="param-input">
-            </div>
-        </div>
-        <div class="control-group">
-            <h3>5. Building Parameters</h3>
+        <div class="control-group"><h3 class="collapsible-header">8. Building Parameters <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <div>
                 <label for="project-type-select">Project Type</label>
                 <select id="project-type-select">
@@ -1828,10 +1835,10 @@ input.source-local {
                 style="background-color:#f9f9f9; border:1px solid #ddd; border-radius:4px; padding:15px; overflow-x:auto;">
                 <p style="color:#999; text-align:center;">Area statement will appear here after calculation</p>
             </div>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>6. Layout Blocks</h3>
+        <div class="control-group"><h3 class="collapsible-header">9. Layout Blocks <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <label for="serviceBlockType">Select Block(s) (Ctrl+Click)</label>
             <select id="serviceBlockType" multiple></select>
             <button id="add-block-btn" disabled>Add Block(s) to Plan</button>
@@ -1948,10 +1955,10 @@ input.source-local {
             <div id="service-block-list"
                 style="font-size:0.8em; max-height: 150px; overflow-y:auto; border: 1px solid #eee; padding: 5px; margin-top: 5px;">
             </div>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>7. Composite Blocks</h3>
+        <div class="control-group"><h3 class="collapsible-header">10. Composite Blocks <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Manage and place building cores.</p>
 
             <div id="composite-preview-wrapper"
@@ -1983,10 +1990,10 @@ input.source-local {
                 <button id="new-composite-btn" class="active">New</button>
                 <button id="delete-composite-btn" class="danger">Delete</button>
             </div>
-        </div>
+        </div></div>
 
-        <div class="control-group">
-            <h3>8. Parking Layout Tool</h3>
+        <div class="control-group"><h3 class="collapsible-header">11. Parking Layout Tool <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Draw parking on the currently selected
                 level.</p>
             <div class="input-grid">
@@ -2073,11 +2080,11 @@ input.source-local {
                 <div class="parking-row total"><span>Total Required:</span><b id="parking-required-total">0</b></div>
                 <div class="parking-row"><span>Total Provided:</span><b id="parking-provided">0</b></div>
             </div>
-        </div>
+        </div></div>
 
         <div id="program-specific-controls">
-            <div class="control-group">
-                <h3 id="mix-title">9. Apartment Mix</h3>
+            <div class="control-group"><h3 class="collapsible-header"><span id="mix-title">12. Apartment Mix</span> <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
                 <div id="apt-mode-toggle" class="button-grid">
                     <label><input type="radio" name="apt-mode" value="auto" checked> Automatic Mix</label>
                     <label><input type="radio" name="apt-mode" value="manual"> Manual Counts</label>
@@ -2102,6 +2109,14 @@ input.source-local {
                                 <option value="projecting">Projecting (Outside Setback)</option>
                             </select>
                         </div>
+                        <div>
+                            <label for="apartment-arrangement-mode" title="Roadmap §11.A-C: how units are seeded along each edge before the best-fit packer fills the rest. Closed polygons only - open/linear footprints always use Auto.">Arrangement Mode</label>
+                            <select id="apartment-arrangement-mode">
+                                <option value="auto">A. Auto Arrange</option>
+                                <option value="corners_first">B. Corners First, Then Fill</option>
+                                <option value="center_first">C. Center First, Then Fill</option>
+                            </select>
+                        </div>
                     </div>
                     <div style="font-size: 0.9em; margin-top: 10px;">
                         <label><input type="checkbox" id="double-loaded-corridor"> Double Loaded Corridor</label>
@@ -2112,18 +2127,18 @@ input.source-local {
                 <div id="manual-counts-container" style="margin-top:10px; display:none;">
                     <!-- Manual count inputs will be populated here -->
                 </div>
-            </div>
+            </div></div>
 
-            <div class="control-group">
-                <h3 id="unit-defs-title">10. Unit Definitions</h3>
+            <div class="control-group"><h3 class="collapsible-header"><span id="unit-defs-title">13. Unit Definitions</span> <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
                 <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Click a unit to edit.</p>
                 <div id="unit-cards-container"></div>
-            </div>
+            </div></div>
         </div>
 
 
-        <div class="control-group">
-            <h3>11. Actions</h3>
+        <div class="control-group"><h3 class="collapsible-header">14. Actions <span class="panel-toggle-indicator">−</span></h3>
+            <div class="collapsible-content">
             <button id="calculateBtn" class="active" disabled>Generate Summary Report</button>
             <button id="generateDetailedReportBtn" class="active" disabled style="margin-top: 5px;">Generate Detailed
                 Report</button>
@@ -2176,9 +2191,9 @@ input.source-local {
                 <label><input type="checkbox" id="show-affection-plan-3d" checked> Show Affection Plan</label>
                 <label><input type="checkbox" id="show-typical-polygon-3d" checked> Show Typical Polygon</label>
             </div>
-        </div>
+        </div></div>
         <div class="control-group">
-            <h3 class="collapsible-header collapsed">12. Cost & Revenue Parameters <span>+</span></h3>
+            <h3 class="collapsible-header collapsed">Cost &amp; Revenue Parameters <span class="panel-toggle-indicator">+</span></h3>
             <div class="collapsible-content collapsed">
                 <div class="checkbox-grid" style="margin-bottom: 15px;">
                     <label><input type="checkbox" id="toggle-cost-analysis" checked> Include Project Cost</label>
@@ -2291,7 +2306,7 @@ input.source-local {
         <div id="report-container"></div>
 
         <div class="control-group">
-            <h3 class="collapsible-header collapsed">8. Scripts &amp; Macros <span>+</span></h3>
+            <h3 class="collapsible-header collapsed">Scripts &amp; Macros <span class="panel-toggle-indicator">+</span></h3>
             <div class="collapsible-content collapsed">
                 <div style="display:flex; gap:5px; margin-bottom:10px;">
                     <button id="macro-record-btn" class="warning" style="flex:1;"
@@ -3709,17 +3724,17 @@ function generateScenarioId() {
 
 // Pulls the currently drawn geometry + related per-scenario state off the
 // live canvas into a plain, JSON-serializable snapshot. Deliberately does
-// NOT include scale/background/projectType - those are shared across all
-// scenarios.
+// NOT include scale/background/projectType/plot - those are shared across
+// all scenarios (see "3. Plot Boundary" - a one-time setup step, not
+// per-scenario geometry).
 function captureActiveScenarioGeometry() {
     if (!state.canvas) return null;
     return {
-        plotEdgeProperties: JSON.parse(JSON.stringify(state.plotEdgeProperties || [])),
         manualAreaOverrides: JSON.parse(JSON.stringify(state.manualAreaOverrides || {})),
         userCompositeBlocks: JSON.parse(JSON.stringify(state.userCompositeBlocks || [])),
         currentLevel: state.currentLevel,
         canvasObjects: state.canvas.getObjects()
-            .filter(obj => !obj.isSnapPoint && !obj.isEdgeHighlight && !obj.isSnapIndicator && !obj.isDxfOverlay)
+            .filter(obj => !obj.isSnapPoint && !obj.isEdgeHighlight && !obj.isSnapIndicator && !obj.isDxfOverlay && !obj.isPlot)
             .map(obj => obj.toObject(SCENARIO_SNAPSHOT_PROPS))
     };
 }
@@ -3730,27 +3745,33 @@ function saveGeometryIntoScenario(scenarioId) {
     state.scenarios[scenarioId].updatedAt = Date.now();
 }
 
-// Removes every drawn geometry object from the canvas (plot, footprints,
-// parking, blocks, guides, DXF overlay) without touching the background
-// image or scale. Used by both "Reset All Geometry" and scenario switching.
+// Removes every SCENARIO-SPECIFIC geometry object from the canvas
+// (footprints, parking, blocks, guides, DXF overlay) without touching the
+// background image, scale, or the plot boundary. The plot (+ its
+// setback/edge settings) is a one-time, shared setup step - see
+// "3. Plot Boundary" - so it deliberately survives both "Reset All
+// Geometry" and scenario switching; only redraw it if the boundary
+// itself is actually wrong.
 function clearGeometryFromCanvas() {
     if (state.canvas) {
-        state.canvas.getObjects().slice().forEach(obj => state.canvas.remove(obj));
+        state.canvas.getObjects().slice().forEach(obj => {
+            if (obj.isPlot) return;
+            state.canvas.remove(obj);
+        });
     }
     state.levels = JSON.parse(JSON.stringify(LEVEL_DEFINITIONS));
     state.serviceBlocks = [];
     state.parkingRows = [];
     state.guideLines = [];
-    state.plotPolygon = null;
     state.lastCalculatedData = null;
     state.currentApartmentLayout = null;
     state.livePreviewLayout = null;
-    state.plotEdgeProperties = [];
     state.setbackGuides = [];
     state.selectedPlotEdges = [];
     state.edgeHighlightGroup = null;
     state.dxfOverlayGroup = null;
     state.manualAreaOverrides = {};
+    // plotPolygon and plotEdgeProperties are intentionally NOT reset here.
 }
 
 // Loads a scenario's snapshot onto the (already-cleared) canvas. Returns a
@@ -3768,16 +3789,20 @@ function loadGeometryFromScenario(scenarioId) {
             resolve();
             return;
         }
-        state.plotEdgeProperties = JSON.parse(JSON.stringify(snap.plotEdgeProperties || []));
         state.manualAreaOverrides = JSON.parse(JSON.stringify(snap.manualAreaOverrides || {}));
         state.userCompositeBlocks = JSON.parse(JSON.stringify(snap.userCompositeBlocks || PREDEFINED_COMPOSITE_BLOCKS));
         state.currentLevel = snap.currentLevel || state.currentLevel;
 
-        if (snap.canvasObjects && snap.canvasObjects.length) {
-            fabric.util.enlivenObjects(snap.canvasObjects, (objects) => {
+        // Legacy safety: older scenario snapshots (saved before the plot
+        // became shared) may still carry a plot object - skip it, since
+        // the live shared plot is already on the canvas and must not be
+        // duplicated or overwritten by a per-scenario copy.
+        const objectsToEnliven = (snap.canvasObjects || []).filter(o => !o.isPlot);
+
+        if (objectsToEnliven.length) {
+            fabric.util.enlivenObjects(objectsToEnliven, (objects) => {
                 objects.forEach(obj => {
                     state.canvas.add(obj);
-                    if (obj.isPlot) state.plotPolygon = obj;
                     if (obj.isParkingRow) state.parkingRows.push(obj);
                     if (obj.isServiceBlock || obj.isCompositeGroup) state.serviceBlocks.push(obj);
                     if (obj.isGuide) state.guideLines.push(obj);
@@ -3917,16 +3942,18 @@ function renderScenarioTabs() {
 }
 
 // "Reset All Geometry" - the ONLY action that clears geometry. Loading or
-// reloading a plan (handlePlanUpload) never does this anymore.
+// reloading a plan (handlePlanUpload) never does this anymore. The plot
+// boundary is deliberately preserved too - it's a one-time setup step
+// shared across scenarios, not something you should have to redraw.
 function resetGeometryKeepBackground() {
-    if (!confirm('This clears every drawn shape (plot, footprints, parking, blocks, guides, DXF overlay) in the CURRENT scenario. The PDF/image background and scale are kept. Continue?')) return;
+    if (!confirm('This clears every footprint, parking row, block, and guide in the CURRENT scenario. The PDF/image background, scale, AND plot boundary are all kept. Continue?')) return;
     clearGeometryFromCanvas();
     if (state.activeScenarioId) saveGeometryIntoScenario(state.activeScenarioId);
     state.canvas.requestRenderAll();
     updateUI();
     persistScenarios();
     autosaveToLocalStorage();
-    document.getElementById('status-bar').textContent = 'All geometry cleared. PDF/image background and scale were kept.';
+    document.getElementById('status-bar').textContent = 'Geometry cleared. PDF/image background, scale, and plot boundary were kept.';
 }
 
 // Switches through every scenario, generates its summary report, then
@@ -4785,7 +4812,14 @@ function redrawApartmentPreview(layoutData) {
 
 
 
-function  layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset = true, calcMode = 'center', doubleLoaded = false) {
+// Roadmap §11: reads the Arrangement Mode dropdown (auto / corners_first /
+// center_first) added next to Calculation Mode in the Apartment Mix panel.
+function getSelectedArrangementMode() {
+    const sel = document.getElementById('apartment-arrangement-mode');
+    return sel ? sel.value : 'auto';
+}
+
+function  layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset = true, calcMode = 'center', doubleLoaded = false, arrangementMode = 'auto') {
     if (!counts || !poly || !poly.points || poly.points.length < 2 || state.scale.ratio === 0) {
         return { placedFlats: [], outerCorridorPolyPoints: [], innerCorridorPolyPoints: [], corridorArea: 0, corridorPoly: null, staircaseValidation: { valid: true, message: "No data."} };
     }
@@ -4854,6 +4888,51 @@ function  layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset = true, ca
         });
     }
 
+    // Roadmap §11.B/§11.C: seed one anchor unit per segment BEFORE the
+    // normal best-fit pass runs, so corner/center units are placed first
+    // and the existing best-fit engine (unchanged below) just fills in
+    // around them from the same shared unit pool. Closed polygons only -
+    // an open/linear footprint's "corners" are just its two open ends,
+    // which the existing corner-buffer logic already handles adequately,
+    // so arrangementMode is ignored there and 'auto' behavior is used.
+    if (isClosed && arrangementMode === 'corners_first') {
+        // allUnitsToPlace is already sorted ascending by frontage (see
+        // above), so the first fitting unit IS the smallest-fitting one -
+        // smaller units read better tucked into a corner than large ones.
+        segments.forEach(seg => {
+            if (seg.availableLength <= 0 || allUnitsToPlace.length === 0) return;
+            const fitIdx = allUnitsToPlace.findIndex(u => u.frontage <= seg.availableLength);
+            if (fitIdx === -1) return;
+            const unit = allUnitsToPlace.splice(fitIdx, 1)[0];
+            seg.placedUnits.push(unit);
+            seg.availableLength -= unit.frontage;
+            seg.isCornerAnchored = true; // forces start-aligned positioning below, so this unit lands at the corner, not centered
+        });
+    } else if (isClosed && arrangementMode === 'center_first') {
+        // Search from the END of the ascending-sorted array so the LARGEST
+        // fitting unit is picked - segment centers/mid-spans read better
+        // with the bigger unit type than a corner does.
+        segments.forEach(seg => {
+            if (seg.availableLength <= 0 || allUnitsToPlace.length === 0) return;
+            let fitIdx = -1;
+            for (let i = allUnitsToPlace.length - 1; i >= 0; i--) {
+                if (allUnitsToPlace[i].frontage <= seg.availableLength) { fitIdx = i; break; }
+            }
+            if (fitIdx === -1) return;
+            const unit = allUnitsToPlace.splice(fitIdx, 1)[0];
+            seg.placedUnits.push(unit);
+            seg.availableLength -= unit.frontage;
+            seg.isCenterAnchored = true;
+            // NOTE: this anchors a unit on the segment before best-fit fills
+            // the rest, and the segment's placedUnits block is then centered
+            // as a whole (calcMode 'center' below) - a simplification of a
+            // true "fill outward symmetrically from the center anchor" that
+            // the current one-directional segment layout doesn't support
+            // without deeper restructuring. Flag if strict bidirectional
+            // outward-fill is needed later.
+        });
+    }
+
     let placedInPass = true;
     while (allUnitsToPlace.length > 0 && placedInPass) {
         placedInPass = false;
@@ -4880,7 +4959,13 @@ function  layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset = true, ca
         const totalPlacedFrontage = seg.placedUnits.reduce((sum, unit) => sum + unit.frontage, 0);
         let currentDistMeters;
 
-        if (calcMode === 'center') {
+        // Roadmap §11.B/§11.C overrides: a corner-anchored segment must stay
+        // start-aligned (so its anchor unit sits right at the corner) even
+        // if calcMode is 'center'; a center-anchored segment must stay
+        // centered even if calcMode is 'offset' - otherwise the anchor
+        // placed above wouldn't end up where its name says it should.
+        const effectiveCalcMode = seg.isCornerAnchored ? 'offset' : (seg.isCenterAnchored ? 'center' : calcMode);
+        if (effectiveCalcMode === 'center') {
             const buffers = (isClosed ? 8.0 : seg.startBuffer); 
             currentDistMeters = (seg.originalLength - buffers - totalPlacedFrontage) / 2 + buffers;
         } else { 
@@ -5478,12 +5563,76 @@ function sweepRowsForType(polyPoints, scaleRatio, parkingType, rowType, obstacle
 // logic already used for rooms in apartmentLayout.js (layoutFlatsOnPolygon)
 // but for parking bays instead of units. Best for irregular/angled plots
 // where an axis-aligned OBB sweep would waste corners.
+// Full-WIDTH validity check for a candidate parking row: samples the outer
+// edge, centerline, AND inner edge (not just the centerline) so a row can
+// only be accepted if its entire footprint - not just its middle line -
+// stays inside the plot polygon and clear of every obstacle. The outer/
+// inner offsets are pulled in very slightly (2%) from the true half-width
+// as a safety margin, since a row placed exactly flush with the plot
+// boundary can sample as ambiguously in/out right on the edge due to
+// floating point - this guarantees the row reads as genuinely INSIDE the
+// plot, not just touching its boundary.
+function isRowBandInsidePolygonAndClear(p1, p2, widthPx, polyPoints, obstacles, samples = 40) {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const half = widthPx / 2 * 0.98;
+    const offsets = [0, half, -half];
+    for (const off of offsets) {
+        const a = { x: p1.x + nx * off, y: p1.y + ny * off };
+        const b = { x: p2.x + nx * off, y: p2.y + ny * off };
+        for (let i = 0; i <= samples; i++) {
+            const t = i / samples;
+            const pt = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+            if (!isPointInPolygon(pt, polyPoints)) return false;
+            for (let j = 0; j < obstacles.length; j++) {
+                const o = obstacles[j];
+                if (isPointInRotatedRect(pt, o.center, o.width, o.height, o.angleRad)) return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Starts at the FULL edge-derived line and shrinks the same amount off
+// BOTH ends together (staying centered on the original segment) until the
+// full-width band passes isRowBandInsidePolygonAndClear, or gives up once
+// there's not enough length left for a single bay. This is a literal
+// "reduce length from each side until it clears" behaviour, as opposed to
+// hunting for the best clear sub-run anywhere along the line - it keeps the
+// row centered on the plot edge segment it came from rather than sliding it
+// toward whichever side happens to be more open.
+function shrinkRowFromBothEndsUntilClear(p1, p2, widthPx, polyPoints, obstacles, minLengthPx) {
+    const fullLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    if (fullLen < minLengthPx) return null;
+    const dirX = (p2.x - p1.x) / fullLen, dirY = (p2.y - p1.y) / fullLen;
+    const stepPx = Math.max(2, fullLen * 0.02); // 2% steps - fine enough to converge without excessive iteration
+    let shrinkEach = 0;
+    while (fullLen - 2 * shrinkEach >= minLengthPx) {
+        const testP1 = { x: p1.x + dirX * shrinkEach, y: p1.y + dirY * shrinkEach };
+        const testP2 = { x: p2.x - dirX * shrinkEach, y: p2.y - dirY * shrinkEach };
+        if (isRowBandInsidePolygonAndClear(testP1, testP2, widthPx, polyPoints, obstacles)) {
+            return { start: testP1, end: testP2, lengthPx: fullLen - 2 * shrinkEach };
+        }
+        shrinkEach += stepPx;
+    }
+    return null; // never cleared even at the minimum viable length
+}
+
 function sweepRowsAlongPerimeter(polyPoints, scaleRatio, parkingType, rowType, obstacles = []) {
     if (!polyPoints || polyPoints.length < 3) return [];
     const ccwPoints = ensureCounterClockwise(polyPoints);
     const rowDepthM = rowDepthMetersFor(parkingType) * (rowType === 'double' ? 2 : 1);
     const rowDepthPx = rowDepthM / scaleRatio;
     const cornerBufferPx = (2.0) / scaleRatio; // keep rows off sharp corners, mirrors apartmentLayout's cornerBuffer
+    // Setback between the plot boundary and the OUTER edge of the parking
+    // row (e.g. for a landscaping strip / fire access / boundary setback
+    // required before parking can start) - EDIT per local code. This is IN
+    // ADDITION to rowDepth/2 below, which centers the row's own footprint
+    // against the setback line so the row sits fully inside it.
+    const PLOT_EDGE_SETBACK_M = 3.0;
+    const insideSafetyMarginPx = PLOT_EDGE_SETBACK_M / scaleRatio;
+    const minRowLengthM = parkingType === 'parallel' ? 5.5 : 2.5; // roughly one bay's worth as a floor - calculateBaysForLength below is still the authoritative "at least 1 bay fits" check
 
     const rows = [];
     // Own running obstacle list, seeded with the caller's (service blocks)
@@ -5498,18 +5647,28 @@ function sweepRowsAlongPerimeter(polyPoints, scaleRatio, parkingType, rowType, o
         const edgeLenPx = Math.hypot(dx, dy);
         if (edgeLenPx < cornerBufferPx * 2) continue;
 
-        // Inward normal (polygon is CCW, so rotating the edge direction by
-        // -90deg points into the interior - matches getOffsetPolygon's convention).
+        // Inward normal - matches the proven convention used elsewhere in
+        // this file (apartmentLayout.js's corridor offset: {x:-dy/len,
+        // y:dx/len}). This was previously the OPPOSITE sign ({x:dy/len,
+        // y:-dx/len}), which pushed every row OUTWARD off the plot instead
+        // of inward - every row then failed the inside-polygon check and
+        // the sweep silently produced zero rows. That was the root cause of
+        // "follow plot perimeter produces no parking bays."
         const ux = dx / edgeLenPx, uy = dy / edgeLenPx;
-        const nx = uy, ny = -ux;
+        const nx = -uy, ny = ux;
 
         const startPx = { x: p1.x + ux * cornerBufferPx, y: p1.y + uy * cornerBufferPx };
         const endPx = { x: p2.x - ux * cornerBufferPx, y: p2.y - uy * cornerBufferPx };
-        const offset = rowDepthPx / 2;
+        const offset = rowDepthPx / 2 + insideSafetyMarginPx;
+        // The full plot-edge segment, used AS the parking row's baseline -
+        // trimmed from both ends below only as far as needed to clear
+        // obstacles, rather than jumping straight to whatever sub-run
+        // happens to be longest.
         const rowStart = { x: startPx.x + nx * offset, y: startPx.y + ny * offset };
         const rowEnd = { x: endPx.x + nx * offset, y: endPx.y + ny * offset };
 
-        const clipped = clipSegmentToPolygonLongestRun(rowStart, rowEnd, polyPoints, runningObstacles);
+        const minLengthPx = minRowLengthM / scaleRatio;
+        const clipped = shrinkRowFromBothEndsUntilClear(rowStart, rowEnd, rowDepthPx, polyPoints, runningObstacles, minLengthPx);
         if (!clipped) continue;
         const lengthMeters = clipped.lengthPx * scaleRatio;
         if (calculateBaysForLength(lengthMeters, parkingType) < 1) continue;
@@ -6040,19 +6199,23 @@ function handleCanvasMouseDown(pointer) {
         case 'drawingPlot':
         case 'drawingPlayArea':
         case 'drawingBuilding':
-        case 'drawingLinearBuilding':
-        case 'drawingCorridor':
-            if (!['drawingLinearBuilding', 'drawingCorridor'].includes(state.currentMode) && polygonPoints.length > 2 && Math.hypot(pointer.x - polygonPoints[0].x, pointer.y - polygonPoints[0].y) < 10 / state.canvas.getZoom()) {
-
+            // Click-to-close: if this click lands near the FIRST point of
+            // the polygon (within a 10px/zoom tolerance), finish it as a
+            // closed fabric.Polygon instead of adding another point.
+            if (polygonPoints.length > 2 && Math.hypot(pointer.x - polygonPoints[0].x, pointer.y - polygonPoints[0].y) < 10 / state.canvas.getZoom()) {
                 const finalPolygon = new fabric.Polygon(finalpolygonPoints, { selectable: false, evented: false, objectCaching: false });
                 resetDrawingState();
                 return { action: 'finishPolygon', polygon: finalPolygon };
             }
-            if ((state.currentMode == 'drawingLinearBuilding' || state.currentMode === 'drawingCorridor') && polygonPoints.length > 2) {
-                const finalPolyline = new fabric.Polyline(finalpolygonPoints, { selectable: false, evented: false, objectCaching: false });
-                resetDrawingState();
-                return { action: 'finishPolyline', polyline: finalPolyline };
-            }
+            finalpolygonPoints.push({ x: pointer.x, y: pointer.y });
+            addDrawingPoint({ x: pointer.x, y: pointer.y });
+            break;
+        case 'drawingLinearBuilding':
+        case 'drawingCorridor':
+            // These are OPEN polylines, not closed polygons - clicking never
+            // auto-finishes them (see comment history below); Escape is the
+            // only way to finish, handled in handleGlobalKeyDown, so any
+            // number of points can be placed.
             finalpolygonPoints.push({ x: pointer.x, y: pointer.y });
             addDrawingPoint({ x: pointer.x, y: pointer.y });
             break;
@@ -6133,11 +6296,12 @@ function handleCanvasMouseMove(o) {
                         const estimatedUnits = Math.floor(props.perimeter / avgFrontage);
                         const counts = allocateCountsByPercent(estimatedUnits, program.unitTypes);
                         const calcMode = document.getElementById('apartment-calc-mode').value;
+                        const arrangementMode = getSelectedArrangementMode();
                         const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
                         const balconyPlacement = document.getElementById('balcony-placement').value;
                         const includeBalconiesInOffset = balconyPlacement === 'recessed';
 
-                        liveLayoutData = layoutFlatsOnPolygon(tempFabricShape, counts, includeBalconiesInOffset, calcMode, doubleLoaded);
+                        liveLayoutData = layoutFlatsOnPolygon(tempFabricShape, counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode);
                         console.log('liveLayoutData');
                         console.log(liveLayoutData);
 
@@ -6472,7 +6636,15 @@ function placeServiceBlock(pointer, blockKeyOrData, levelOverride = null) {
     });
     const lockIcon = new fabric.Text("🔒", { fontSize: Math.min(blockWidth, blockHeight) * 0.2, left: Math.min(blockWidth, blockHeight) * 0.2, originY: 'center', visible: true });
 
-    const group = new fabric.Group([rect, label, lockIcon], {
+    const groupObjects = [rect, label, lockIcon];
+    // Roadmap §9: bake a drive-direction arrow into ramp blocks so direction
+    // is visible on the plan, not just stored as data for the flow diagram.
+    // Grouped alongside rect/label so it moves/rotates with the ramp for free.
+    if (blockData.role === 'ramp' && blockData.rampDirection) {
+        groupObjects.push(...buildRampDirectionArrowParts(blockData.rampDirection, blockWidth, blockHeight));
+    }
+
+    const group = new fabric.Group(groupObjects, {
         left: pointer.x,
         top: pointer.y,
         originX: 'center',
@@ -6489,6 +6661,235 @@ function placeServiceBlock(pointer, blockKeyOrData, levelOverride = null) {
     state.serviceBlocks.push(group);
     state.canvas.add(group);
     return group;
+}
+
+// Roadmap §9: direction-arrow shapes for a ramp block, in the block's own
+// LOCAL coordinate space (centered on 0,0, matching how rect/label/lockIcon
+// above are built with no left/top - fabric.Group treats that shared origin
+// as the group's own center). Drawn along the block's longer axis (3.0m
+// width vs 2.7m height) as the direction-of-travel axis: Entry points
+// toward -X (into the ramp), Exit points toward +X (out) - this is a fixed
+// convention, not derived from the actual site layout, so use "Flip Ramp
+// Direction" if it doesn't match the real orientation once rotated.
+function buildRampDirectionArrowParts(rampDirection, blockWidth, blockHeight) {
+    const dirSign = rampDirection === 'entry' ? -1 : 1;
+    const shaftLen = Math.min(blockWidth, blockHeight * 2.2) * 0.55;
+    const headSize = Math.min(blockWidth, blockHeight) * 0.4;
+    const color = '#ffffff';
+    const line = new fabric.Line(
+        [-dirSign * shaftLen / 2, 0, dirSign * shaftLen / 2, 0],
+        { stroke: color, strokeWidth: 2.5, originX: 'center', originY: 'center', selectable: false, evented: false, isRampArrowPart: true }
+    );
+    const head = new fabric.Triangle({
+        left: dirSign * shaftLen / 2, top: 0,
+        originX: 'center', originY: 'center',
+        width: headSize, height: headSize,
+        angle: dirSign > 0 ? 90 : -90,
+        fill: color, stroke: color,
+        selectable: false, evented: false, isRampArrowPart: true
+    });
+    return [line, head];
+}
+
+// Roadmap §9: lets the user correct a ramp's direction (and its drawn
+// arrow) after placement without having to delete and re-place it. Updates
+// the SAME blockData object trafficFlow.js reads via b.blockData.rampDirection,
+// so a flip is picked up by Derive Parking Flow immediately.
+function flipSelectedRampDirection() {
+    const selected = state.canvas.getActiveObject();
+    if (!selected || !selected.blockData || selected.blockData.role !== 'ramp') {
+        document.getElementById('status-bar').textContent = 'Select a placed Entry/Exit ramp first, then Flip Ramp Direction.';
+        return;
+    }
+    selected.blockData.rampDirection = selected.blockData.rampDirection === 'entry' ? 'exit' : 'entry';
+    selected.getObjects().filter(o => o.isRampArrowPart).forEach(o => selected.remove(o));
+    const newArrowParts = buildRampDirectionArrowParts(selected.blockData.rampDirection, selected.width, selected.height);
+    newArrowParts.forEach(o => selected.addWithUpdate(o));
+    state.canvas.renderAll();
+    document.getElementById('status-bar').textContent = `Ramp direction set to ${selected.blockData.rampDirection}.`;
+}
+
+// ============================================================
+// ROADMAP §10: AUTO-JOIN 90-DEGREE RAMPS WITH A CIRCULAR RAMP
+// ============================================================
+// "Same direction" is read as: both ramps carry the SAME rampDirection tag
+// (both 'entry' or both 'exit') - i.e. two straight segments of one
+// continuous entry/exit ramp that bends around a corner, which is how
+// multi-level parking ramps actually work (you wouldn't splice an entry
+// segment into an exit segment). This is a detection HEURISTIC, not a
+// guarantee the two ramps were meant to connect - it's offered as a
+// confirmable action, never joined silently, per the roadmap note that a
+// false-positive match would draw a nonsensical curve.
+const RAMP_JOIN_MIN_RADIUS_M = 3.0;   // EDIT per local code - minimum ramp curve radius
+const RAMP_JOIN_MAX_RADIUS_M = 7.5;   // EDIT per local code - maximum ramp curve radius
+const RAMP_JOIN_ANGLE_TOLERANCE_DEG = 8;   // how close to exactly 90 degrees counts as a match
+const RAMP_JOIN_MAX_GAP_M = 25;   // ignore ramp pairs further apart than this - not a plausible join
+
+function angleDiffDeg(a1, a2) {
+    let diff = ((a1 - a2) % 360 + 360) % 360;
+    if (diff > 180) diff = 360 - diff;
+    return diff; // always 0..180
+}
+
+// The two end-points of a ramp block along its own travel axis (its 3.0m
+// width dimension - see buildRampDirectionArrowParts's header comment for
+// why that's treated as the direction-of-travel axis), in canvas space.
+function getRampEndPoints(ramp) {
+    const center = ramp.getCenterPoint();
+    const angleRad = fabric.util.degreesToRadians(ramp.angle || 0);
+    const halfW = (ramp.getScaledWidth ? ramp.getScaledWidth() : ramp.width) / 2;
+    const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+    return [
+        { x: center.x + halfW * cos, y: center.y + halfW * sin },
+        { x: center.x - halfW * cos, y: center.y - halfW * sin }
+    ];
+}
+
+// Scans every pair of ramps on a level for a plausible 90-degree, same-
+// direction join. Returns an array of candidate objects (not yet joined).
+function detectRampJoinCandidates(level) {
+    const ramps = (state.serviceBlocks || []).filter(b => b.level === level && b.blockData && b.blockData.role === 'ramp' && b.blockData.rampShape !== 'curve');
+    const candidates = [];
+    for (let i = 0; i < ramps.length; i++) {
+        for (let j = i + 1; j < ramps.length; j++) {
+            const a = ramps[i], b = ramps[j];
+            if (a.blockData.rampDirection !== b.blockData.rampDirection) continue;
+            const angDiff = angleDiffDeg(a.angle || 0, b.angle || 0);
+            if (Math.abs(angDiff - 90) > RAMP_JOIN_ANGLE_TOLERANCE_DEG) continue;
+
+            const aEnds = getRampEndPoints(a), bEnds = getRampEndPoints(b);
+            let best = null;
+            aEnds.forEach((pa, ai) => bEnds.forEach((pb, bi) => {
+                const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+                if (!best || d < best.dist) best = { dist: d, aEnd: pa, bEnd: pb, aIdx: ai, bIdx: bi };
+            }));
+            if (!best) continue;
+            const gapMeters = best.dist * (state.scale.ratio || 1);
+            if (gapMeters > RAMP_JOIN_MAX_GAP_M) continue;
+
+            candidates.push({ a, b, aEnd: best.aEnd, bEnd: best.bEnd });
+        }
+    }
+    return candidates;
+}
+
+// Builds and draws the quarter-circle fillet joining two ramps, snapping
+// each ramp's position (never its angle) along its own axis so the curve
+// is exactly tangent at both ends. See roadmap §10 for the corner-fillet
+// geometry this implements: for two perpendicular lines meeting at
+// cornerPt, a circle of radius R tangent to both has its center at
+// cornerPt + dirA*R + dirB*R, where dirA/dirB are the unit directions from
+// the corner toward each tangent point.
+function joinRampsWithCircularRamp(candidate) {
+    const { a, b, aEnd, bEnd } = candidate;
+    const scaleRatio = state.scale.ratio || 1;
+
+    // Corner = where the two ramps' centerlines (extended) actually cross.
+    // (Compare by coordinates, not reference - aEnd/bEnd are plain data
+    // objects copied out of detectRampJoinCandidates, not the same object
+    // instances a fresh getRampEndPoints() call would return.)
+    const pickOther = (ends, matchPt) => {
+        const d0 = Math.hypot(ends[0].x - matchPt.x, ends[0].y - matchPt.y);
+        const d1 = Math.hypot(ends[1].x - matchPt.x, ends[1].y - matchPt.y);
+        return d0 <= d1 ? ends[1] : ends[0];
+    };
+    const aOther = pickOther(getRampEndPoints(a), aEnd);
+    const bOther = pickOther(getRampEndPoints(b), bEnd);
+    const cornerPt = getLineIntersection(aEnd, aOther, bEnd, bOther);
+    if (!cornerPt) {
+        document.getElementById('status-bar').textContent = 'Could not resolve a corner point for these two ramps (they may be parallel) - join cancelled.';
+        return null;
+    }
+
+    const distA = Math.hypot(aEnd.x - cornerPt.x, aEnd.y - cornerPt.y) * scaleRatio;
+    const distB = Math.hypot(bEnd.x - cornerPt.x, bEnd.y - cornerPt.y) * scaleRatio;
+    const impliedRadiusM = (distA + distB) / 2;
+    const radiusM = Math.min(RAMP_JOIN_MAX_RADIUS_M, Math.max(RAMP_JOIN_MIN_RADIUS_M, impliedRadiusM));
+    const radiusPx = radiusM / scaleRatio;
+
+    const dirA = { x: (aEnd.x - cornerPt.x) / (distA / scaleRatio || 1), y: (aEnd.y - cornerPt.y) / (distA / scaleRatio || 1) };
+    const dirB = { x: (bEnd.x - cornerPt.x) / (distB / scaleRatio || 1), y: (bEnd.y - cornerPt.y) / (distB / scaleRatio || 1) };
+
+    // New tangent points, exactly radiusPx from the corner along each ramp's line.
+    const newAEnd = { x: cornerPt.x + dirA.x * radiusPx, y: cornerPt.y + dirA.y * radiusPx };
+    const newBEnd = { x: cornerPt.x + dirB.x * radiusPx, y: cornerPt.y + dirB.y * radiusPx };
+
+    // Slide each ramp along its own axis so its used end lands on its new tangent point.
+    const deltaA = { x: newAEnd.x - aEnd.x, y: newAEnd.y - aEnd.y };
+    const deltaB = { x: newBEnd.x - bEnd.x, y: newBEnd.y - bEnd.y };
+    a.set({ left: a.left + deltaA.x, top: a.top + deltaA.y }); a.setCoords();
+    b.set({ left: b.left + deltaB.x, top: b.top + deltaB.y }); b.setCoords();
+
+    // Circle center = corner + dirA*R + dirB*R (see function header).
+    const arcCenter = { x: cornerPt.x + (dirA.x + dirB.x) * radiusPx, y: cornerPt.y + (dirA.y + dirB.y) * radiusPx };
+
+    // Build the curve by explicitly sampling points around arcCenter, rather
+    // than an SVG "A" arc command with a guessed sweep-flag. Reason: for a
+    // fixed radius and two fixed endpoints there are always TWO possible
+    // circles (mirror images across the chord between them) - the sweep-
+    // flag guess doesn't reliably pick the one matching the arcCenter
+    // computed above, so the browser could draw the arc bulging away from
+    // the corner instead of across it, looking like the two ramps weren't
+    // joined at all. Sampling from arcCenter directly removes that ambiguity
+    // completely - the polyline can only follow the circle we actually built.
+    const startAngle = Math.atan2(newAEnd.y - arcCenter.y, newAEnd.x - arcCenter.x);
+    const endAngle = Math.atan2(newBEnd.y - arcCenter.y, newBEnd.x - arcCenter.x);
+    let sweepDelta = endAngle - startAngle;
+    while (sweepDelta > Math.PI) sweepDelta -= 2 * Math.PI;
+    while (sweepDelta <= -Math.PI) sweepDelta += 2 * Math.PI; // shortest rotation, (-PI, PI]
+    const arcSegments = 24;
+    const arcPoints = [];
+    for (let i = 0; i <= arcSegments; i++) {
+        const t = i / arcSegments;
+        const ang = startAngle + sweepDelta * t;
+        arcPoints.push({ x: arcCenter.x + radiusPx * Math.cos(ang), y: arcCenter.y + radiusPx * Math.sin(ang) });
+    }
+    const pathStr = 'M ' + arcPoints.map(p => `${p.x} ${p.y}`).join(' L ');
+    const rampWidthPx = (a.blockData.width || 3.0) / scaleRatio;
+    const colors = BLOCK_CATEGORY_COLORS['circulation'] || BLOCK_CATEGORY_COLORS.default;
+    const arcPath = new fabric.Path(pathStr, {
+        fill: '', stroke: colors.stroke, strokeWidth: rampWidthPx,
+        strokeLineCap: 'butt', opacity: 0.85,
+        isServiceBlock: true,
+        blockData: { name: 'Circular Ramp', role: 'ramp', rampShape: 'curve', rampDirection: a.blockData.rampDirection, width: a.blockData.width, height: a.blockData.height, radius: radiusM },
+        blockId: `SB-${state.serviceBlockCounter++}`,
+        level: a.level,
+        selectable: true, evented: true
+    });
+    state.serviceBlocks.push(arcPath);
+    state.canvas.add(arcPath);
+    state.canvas.renderAll();
+    recordAction('JOIN_RAMPS', { radiusM: radiusM.toFixed(2) });
+    document.getElementById('status-bar').textContent = `Joined ramps with a circular ramp, radius ${radiusM.toFixed(2)}m (clamped to ${RAMP_JOIN_MIN_RADIUS_M}-${RAMP_JOIN_MAX_RADIUS_M}m).`;
+    return arcPath;
+}
+
+// Entry point wired to the "Detect & Join 90° Ramps" button: scans the
+// current level and, for each candidate pair found, asks for confirmation
+// (showing the radius it would use) before actually joining - never joins
+// silently, since a false-positive 90-degree match would draw a
+// nonsensical curve.
+function detectAndOfferRampJoins() {
+    const candidates = detectRampJoinCandidates(state.currentLevel);
+    if (candidates.length === 0) {
+        document.getElementById('status-bar').textContent = 'No pairs of same-direction ramps at ~90° found on this level to join.';
+        return;
+    }
+    let joined = 0;
+    candidates.forEach((c, idx) => {
+        const scaleRatio = state.scale.ratio || 1;
+        const previewDist = Math.hypot(c.aEnd.x - c.bEnd.x, c.aEnd.y - c.bEnd.y) * scaleRatio;
+        const ok = confirm(
+            `Join ${c.a.blockData.name} <-> ${c.b.blockData.name} (both "${c.a.blockData.rampDirection}") with a circular ramp?\n` +
+            `Gap between ends: ${previewDist.toFixed(1)}m. Curve radius will be clamped to ${RAMP_JOIN_MIN_RADIUS_M}-${RAMP_JOIN_MAX_RADIUS_M}m ` +
+            `(both ramps will be nudged slightly along their own length so the curve is exactly tangent).`
+        );
+        if (ok) {
+            joinRampsWithCircularRamp(c);
+            joined++;
+        }
+    });
+    if (joined === 0) document.getElementById('status-bar').textContent = 'No ramps joined.';
 }
 
 function createCompositeGroup(compositeData, pointer) {
@@ -7477,12 +7878,13 @@ function updateLevelFootprintInfo() {
         let totalCorridorArea = 0;
         const counts = state.lastCalculatedData.aptCalcs.aptMixWithCounts.reduce((acc, apt) => ({ ...acc, [apt.key]: apt.countPerFloor }), {});
         const calcMode = document.getElementById('apartment-calc-mode').value;
+        const arrangementMode = getSelectedArrangementMode();
         const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
         const balconyPlacement = document.getElementById('balcony-placement').value;
         const includeBalconiesInOffset = balconyPlacement === 'recessed';
 
         footprints.forEach(poly => {
-            const layout = layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded);
+            const layout = layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode);
             if (layout.corridorArea) {
                 totalCorridorArea += layout.corridorArea;
             }
@@ -8426,8 +8828,8 @@ function updateProgramUI() {
     const programControls = document.getElementById('program-specific-controls');
     if (state.currentProgram) {
         programControls.style.display = 'block';
-        document.getElementById('mix-title').textContent = `9. ${state.currentProgram.title}`;
-        document.getElementById('unit-defs-title').textContent = `10. ${state.currentProgram.unitDefsTitle}`;
+        document.getElementById('mix-title').textContent = `12. ${state.currentProgram.title}`;
+        document.getElementById('unit-defs-title').textContent = `13. ${state.currentProgram.unitDefsTitle}`;
         renderDistUI();
         renderUnitCards();
     } else {
@@ -8978,7 +9380,7 @@ function initCollapsibleSections() {
     document.querySelectorAll('.collapsible-header').forEach(header => {
         header.addEventListener('click', () => {
             const content = header.nextElementSibling;
-            const indicator = header.querySelector('span');
+            const indicator = header.querySelector('.panel-toggle-indicator');
 
             header.classList.toggle('collapsed');
             content.classList.toggle('collapsed');
@@ -9368,74 +9770,6 @@ function updateDashboard() {
         container.innerHTML = html;
     } else {
         updateLiveApartmentCalc();
-    }
-}
-function alignCoreElements() {
-    const referenceLevel = 'Typical_Floor';
-
-    const getCoreBlocks = (level) => {
-        return state.serviceBlocks.filter(b => {
-            if (b.level !== level) return false;
-            if (b.isCompositeGroup) {
-                return b.getObjects().some(sub => sub.blockData && (sub.blockData.name.toLowerCase().includes('lift') || sub.blockData.role === 'staircase'));
-            }
-            return b.blockData && (b.blockData.name.toLowerCase().includes('lift') || b.blockData.role === 'staircase');
-        });
-    };
-
-    const calculateCentroid = (blocks) => {
-        if (!blocks || blocks.length === 0) return null;
-        const center = blocks.reduce((acc, block) => {
-            const blockCenter = block.getCenterPoint();
-            acc.x += blockCenter.x;
-            acc.y += blockCenter.y;
-            return acc;
-        }, { x: 0, y: 0 });
-
-        center.x /= blocks.length;
-        center.y /= blocks.length;
-        return center;
-    };
-
-    const referenceCoreBlocks = getCoreBlocks(referenceLevel);
-    if (referenceCoreBlocks.length === 0) {
-        document.getElementById('status-bar').textContent = `No core elements (lifts/stairs) found on the reference level '${referenceLevel.replace(/_/g, ' ')}' to align to.`;
-        return;
-    }
-
-    const referenceCentroid = calculateCentroid(referenceCoreBlocks);
-
-    let alignedLevels = 0;
-    LEVEL_ORDER.forEach(levelKey => {
-        if (levelKey === referenceLevel) return;
-
-        const levelCoreBlocks = getCoreBlocks(levelKey);
-        if (levelCoreBlocks.length === 0) return;
-
-        const levelCentroid = calculateCentroid(levelCoreBlocks);
-        if (!levelCentroid) return;
-
-        const dx = referenceCentroid.x - levelCentroid.x;
-        const dy = referenceCentroid.y - levelCentroid.y;
-
-        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
-
-        levelCoreBlocks.forEach(block => {
-            block.set({
-                left: block.left + dx,
-                top: block.top + dy
-            });
-            block.setCoords();
-        });
-        alignedLevels++;
-    });
-
-    if (alignedLevels > 0) {
-        state.canvas.renderAll();
-        recordAction('ALIGN_CORE', { referenceLevel });
-        document.getElementById('status-bar').textContent = `Successfully aligned cores on ${alignedLevels} level(s).`;
-    } else {
-        document.getElementById('status-bar').textContent = 'All cores are already aligned.';
     }
 }
 function setDashVal(id, val, cls) {
@@ -10143,23 +10477,13 @@ function showDimensionInput() {
         else if (e.key === 'Escape') { e.preventDefault(); removeDimensionInput(); }
     });
 
-    const isDrawingPoly = ['drawingPlot', 'drawingBuilding', 'drawingPlayArea', 'drawingLinearBuilding', 'drawingCorridor'].includes(state.currentMode) && polygonPoints.length > 0;
-
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
-        return;
-    }
-
-    if (e.key === 'Escape' && state.currentMode) {
-        e.preventDefault();
-        exitAllModes();
-    }
-
-
-    if (isDrawingPoly && ((e.key >= '0' && e.key <= '9') || e.key === '.')) {
-        e.preventDefault();
-        showDimensionInput();
-        dimensionInputEl.value = e.key;
-    }
+    // NOTE: this function previously ended with handleGlobalKeyDown's entire
+    // body accidentally duplicated in here (referencing an undefined `e` and
+    // never actually attaching the input to the page) - that's why typing a
+    // digit while drawing used to throw instead of showing the box. Fixed:
+    // this function's only job is to create + show the input.
+    document.body.appendChild(dimensionInputEl);
+    dimensionInputEl.focus();
 }
 
 function handleGlobalKeyDown(e) {
@@ -10171,7 +10495,23 @@ function handleGlobalKeyDown(e) {
 
     if (e.key === 'Escape' && state.currentMode) {
         e.preventDefault();
-        exitAllModes();
+        // Roadmap fix: for linear/corridor drawing, Escape now FINISHES the
+        // polyline with whatever points were already clicked (mirroring the
+        // click-based finish path exactly - build the shape from
+        // finalpolygonPoints, reset drawing state, then hand it to
+        // handleFinishPolyline), instead of discarding the in-progress
+        // drawing. Needs at least 2 points for a valid line; with fewer
+        // (or in any other drawing mode) Escape still just cancels via
+        // exitAllModes() as before.
+        const isLinearMode = ['drawingLinearBuilding', 'drawingCorridor'].includes(state.currentMode);
+        if (isLinearMode && polygonPoints.length >= 2) {
+            const currentModeForFinish = state.currentMode;
+            const finalPolyline = new fabric.Polyline(finalpolygonPoints, { selectable: false, evented: false, objectCaching: false });
+            resetDrawingState();
+            handleFinishPolyline(finalPolyline, currentModeForFinish);
+        } else {
+            exitAllModes();
+        }
     }
 
 
@@ -10179,6 +10519,18 @@ function handleGlobalKeyDown(e) {
         e.preventDefault();
         showDimensionInput();
         dimensionInputEl.value = e.key;
+    }
+
+    // Roadmap §12: generic Delete/Backspace shortcut. deleteSelectedObject()
+    // already handles every object type via its common canvas.remove()
+    // fallback (footprints, service blocks, parking rows, bus bays, turning
+    // templates, flow-diagram groups, ramps, etc.) - this just gives it a
+    // keyboard trigger to match the existing "Delete Object" button.
+    // Guarded against firing mid-draw/placement so an accidental Delete
+    // press doesn't wipe out an in-progress polygon or tool placement.
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !state.currentMode && state.canvas && state.canvas.getActiveObject()) {
+        e.preventDefault();
+        deleteSelectedObject();
     }
 }
 
@@ -10535,6 +10887,7 @@ function setupEventListeners() {
 
     safeAddEventListener('double-loaded-corridor', 'change', handlePreviewLayout);
     safeAddEventListener('apartment-calc-mode', 'change', handlePreviewLayout);
+    safeAddEventListener('apartment-arrangement-mode', 'change', handlePreviewLayout);
     safeAddEventListener('balcony-placement', 'change', handlePreviewLayout);
 
     const parkingOverrideCheck = document.getElementById('parking-override-check');
@@ -10562,7 +10915,7 @@ function setupEventListeners() {
     safeAddEventListener('export-pdf-btn', 'click', exportReportAsPDF);
     safeAddEventListener('generate3dBtn', 'click', generate3DBuilding);
     safeAddEventListener('exportScadBtn', 'click', generateOpenScadScript);
-    safeAddEventListener('align-core-btn', 'click', alignCoreElements);
+    safeAddEventListener('align-core-btn', 'click', openCoreAlignmentPicker);
     safeAddEventListener('previewLayoutBtn', 'click', handlePreviewLayout);
     safeAddEventListener('refreshLayoutBtn', 'click', refreshApartmentLayout);
     safeAddEventListener('show-balconies-check', 'change', handlePreviewLayout);
@@ -11352,6 +11705,7 @@ function handleCalculate(isLiveUpdate = false, isDetailed = false) {
 function handlePreviewLayout(event) {
     const btn = document.getElementById('previewLayoutBtn');
     const calcMode = document.getElementById('apartment-calc-mode').value;
+    const arrangementMode = getSelectedArrangementMode();
     const balconyPlacement = document.getElementById('balcony-placement').value;
     const includeBalconiesInOffset = balconyPlacement === 'recessed';
     const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
@@ -11380,7 +11734,7 @@ function handlePreviewLayout(event) {
     const counts = state.lastCalculatedData.aptCalcs.aptMixWithCounts.reduce((acc, apt) => ({ ...acc, [apt.key]: apt.countPerFloor }), {});
 
     state.currentApartmentLayout = polys.map(poly =>
-        layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded)
+        layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode)
     );
 
     btn.textContent = 'Hide Preview';
@@ -11390,6 +11744,7 @@ function handlePreviewLayout(event) {
 
 function refreshApartmentLayout() {
     const calcMode = document.getElementById('apartment-calc-mode').value;
+    const arrangementMode = getSelectedArrangementMode();
     const balconyPlacement = document.getElementById('balcony-placement').value;
     const includeBalconiesInOffset = balconyPlacement === 'recessed';
     const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
@@ -11407,7 +11762,7 @@ function refreshApartmentLayout() {
     const counts = state.lastCalculatedData.aptCalcs.aptMixWithCounts.reduce((acc, apt) => ({ ...acc, [apt.key]: apt.countPerFloor }), {});
 
     state.currentApartmentLayout = polys.map(poly =>
-        layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded)
+        layoutFlatsOnPolygon(poly, counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode)
     );
 
     state.canvas.requestRenderAll();
@@ -11547,11 +11902,9 @@ function handleMouseDown(o) {
     }
     const result = handleCanvasMouseDown(pointer);
     if (result?.action === 'finishPolygon') {
-        alert('finish Polygon');
         handleFinishPolygon(result.polygon);
     }
     if (result?.action === 'finishPolyline') {
-        alert('finish Polyline');
         handleFinishPolyline(result.polyline);
     }
     if (state.currentMode === 'placingBlock') placeServiceBlockFromUI(pointer);
@@ -11736,13 +12089,14 @@ function handleObjectModified(e) {
         const avgFrontage = program.unitTypes.reduce((acc, unit) => acc + (unit.frontage * (unit.mix / totalMix)), 0);
         if (avgFrontage > 0) {
             const calcMode = document.getElementById('apartment-calc-mode').value;
+            const arrangementMode = getSelectedArrangementMode();
             const balconyPlacement = document.getElementById('balcony-placement').value;
             const includeBalconiesInOffset = balconyPlacement === 'recessed';
             const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
 
             const estimatedUnits = Math.floor(tempPerimeter / avgFrontage);
             const counts = allocateCountsByPercent(estimatedUnits, program.unitTypes);
-            state.livePreviewLayout = layoutFlatsOnPolygon(target, counts, includeBalconiesInOffset, calcMode, doubleLoaded);
+            state.livePreviewLayout = layoutFlatsOnPolygon(target, counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode);
             updateParkingDisplay(counts);
         }
     }
@@ -11977,66 +12331,109 @@ function addManualAreaEntry() {
     }
 }
 
+// Roadmap \u00a78: Core Alignment - verify-before-align, rotation, level picker.
+function getCoreBlocksForLevel(level) {
+    return state.serviceBlocks.filter(b => {
+        if (b.level !== level) return false;
+        if (b.isCompositeGroup) {
+            return b.getObjects().some(sub => sub.blockData && (sub.blockData.name.toLowerCase().includes('lift') || sub.blockData.role === 'staircase'));
+        }
+        return b.blockData && (b.blockData.name.toLowerCase().includes('lift') || b.blockData.role === 'staircase');
+    });
+}
+
+function getCoreCentroid(blocks) {
+    if (!blocks || blocks.length === 0) return null;
+    const center = blocks.reduce((acc, block) => {
+        const blockCenter = block.getCenterPoint();
+        acc.x += blockCenter.x;
+        acc.y += blockCenter.y;
+        return acc;
+    }, { x: 0, y: 0 });
+    center.x /= blocks.length;
+    center.y /= blocks.length;
+    return center;
+}
+
+// Size/count fingerprint for a level's core, so a level whose core doesn't
+// actually match the reference (different lift/stair count or sizes) can be
+// flagged instead of silently translated onto the reference centroid, which
+// the old one-click alignCoreElements() used to do unconditionally.
+function getCoreSignature(blocks) {
+    return {
+        count: blocks.length,
+        sizes: blocks.map(b => {
+            const w = b.blockData && b.blockData.width != null ? b.blockData.width : (b.getScaledWidth ? b.getScaledWidth() * (state.scale.ratio || 1) : 0);
+            const h = b.blockData && b.blockData.height != null ? b.blockData.height : (b.getScaledHeight ? b.getScaledHeight() * (state.scale.ratio || 1) : 0);
+            return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
+        }).sort((a, b) => a.w - b.w || a.h - b.h)
+    };
+}
+
+function coreSignaturesMatch(sigA, sigB) {
+    if (sigA.count !== sigB.count) return false;
+    for (let i = 0; i < sigA.sizes.length; i++) {
+        if (Math.abs(sigA.sizes[i].w - sigB.sizes[i].w) > 0.05 || Math.abs(sigA.sizes[i].h - sigB.sizes[i].h) > 0.05) return false;
+    }
+    return true;
+}
+
+function rotatePointAround(pt, center, angleDeg) {
+    const rad = angleDeg * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const dx = pt.x - center.x, dy = pt.y - center.y;
+    return { x: center.x + dx * cos - dy * sin, y: center.y + dx * sin + dy * cos };
+}
+
+// Aligns ONE level's core blocks onto the reference: rotates each block
+// (around the level's own core centroid, using the level's FIRST core
+// block's angle as a stand-in for the whole core's orientation - composite
+// cores are normally built as one consistently-rotated group, so this is a
+// reasonable proxy without needing a full best-fit OBB over every block) so
+// the core's orientation matches the reference, then translates the whole
+// core so its centroid lands on the reference centroid.
+function alignOneLevelCore(levelBlocks, levelCentroid, referenceCentroid, deltaAngleDeg) {
+    if (Math.abs(deltaAngleDeg) > 0.05) {
+        levelBlocks.forEach(block => {
+            const oldCenter = block.getCenterPoint();
+            const newCenter = rotatePointAround(oldCenter, levelCentroid, deltaAngleDeg);
+            block.set({ angle: (block.angle || 0) + deltaAngleDeg, left: newCenter.x, top: newCenter.y });
+            block.setCoords();
+        });
+    }
+    const dx = referenceCentroid.x - levelCentroid.x;
+    const dy = referenceCentroid.y - levelCentroid.y;
+    if (Math.abs(dx) >= 0.1 || Math.abs(dy) >= 0.1) {
+        levelBlocks.forEach(block => {
+            block.set({ left: block.left + dx, top: block.top + dy });
+            block.setCoords();
+        });
+    }
+}
+
+// Legacy one-click entry point - kept in case anything (macros, action-
+// recorder playback) still calls alignCoreElements() directly. Aligns every
+// level unconditionally, translation only, no rotation, no verification.
+// The "Align Vertical Core" button now opens openCoreAlignmentPicker()
+// instead, which adds signature verification, a level picker, and rotation.
 function alignCoreElements() {
     const referenceLevel = 'Typical_Floor';
-
-    const getCoreBlocks = (level) => {
-        return state.serviceBlocks.filter(b => {
-            if (b.level !== level) return false;
-            if (b.isCompositeGroup) {
-                return b.getObjects().some(sub => sub.blockData && (sub.blockData.name.toLowerCase().includes('lift') || sub.blockData.role === 'staircase'));
-            }
-            return b.blockData && (b.blockData.name.toLowerCase().includes('lift') || b.blockData.role === 'staircase');
-        });
-    };
-
-    const calculateCentroid = (blocks) => {
-        if (!blocks || blocks.length === 0) return null;
-        const center = blocks.reduce((acc, block) => {
-            const blockCenter = block.getCenterPoint();
-            acc.x += blockCenter.x;
-            acc.y += blockCenter.y;
-            return acc;
-        }, { x: 0, y: 0 });
-
-        center.x /= blocks.length;
-        center.y /= blocks.length;
-        return center;
-    };
-
-    const referenceCoreBlocks = getCoreBlocks(referenceLevel);
+    const referenceCoreBlocks = getCoreBlocksForLevel(referenceLevel);
     if (referenceCoreBlocks.length === 0) {
         document.getElementById('status-bar').textContent = `No core elements (lifts/stairs) found on the reference level '${referenceLevel.replace(/_/g, ' ')}' to align to.`;
         return;
     }
-
-    const referenceCentroid = calculateCentroid(referenceCoreBlocks);
-
+    const referenceCentroid = getCoreCentroid(referenceCoreBlocks);
     let alignedLevels = 0;
     LEVEL_ORDER.forEach(levelKey => {
         if (levelKey === referenceLevel) return;
-
-        const levelCoreBlocks = getCoreBlocks(levelKey);
+        const levelCoreBlocks = getCoreBlocksForLevel(levelKey);
         if (levelCoreBlocks.length === 0) return;
-
-        const levelCentroid = calculateCentroid(levelCoreBlocks);
+        const levelCentroid = getCoreCentroid(levelCoreBlocks);
         if (!levelCentroid) return;
-
-        const dx = referenceCentroid.x - levelCentroid.x;
-        const dy = referenceCentroid.y - levelCentroid.y;
-
-        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
-
-        levelCoreBlocks.forEach(block => {
-            block.set({
-                left: block.left + dx,
-                top: block.top + dy
-            });
-            block.setCoords();
-        });
+        alignOneLevelCore(levelCoreBlocks, levelCentroid, referenceCentroid, 0);
         alignedLevels++;
     });
-
     if (alignedLevels > 0) {
         state.canvas.renderAll();
         recordAction('ALIGN_CORE', { referenceLevel });
@@ -12044,6 +12441,102 @@ function alignCoreElements() {
     } else {
         document.getElementById('status-bar').textContent = 'All cores are already aligned.';
     }
+}
+
+// Roadmap \u00a78: the new picker flow wired to the "Align Vertical Core"
+// button. Shows every level with a core, flags which ones match the
+// reference level's core signature (count + sizes), pre-checks only the
+// matching ones (mismatches are left for the user to review/opt in), and
+// aligns position AND rotation for whichever levels get confirmed.
+function openCoreAlignmentPicker() {
+    const referenceLevel = 'Typical_Floor';
+    const referenceCoreBlocks = getCoreBlocksForLevel(referenceLevel);
+    if (referenceCoreBlocks.length === 0) {
+        document.getElementById('status-bar').textContent = `No core elements (lifts/stairs) found on the reference level '${referenceLevel.replace(/_/g, ' ')}' to align to.`;
+        return;
+    }
+    const referenceCentroid = getCoreCentroid(referenceCoreBlocks);
+    const referenceSig = getCoreSignature(referenceCoreBlocks);
+    const referenceAngle = referenceCoreBlocks[0].angle || 0;
+
+    const candidates = LEVEL_ORDER
+        .filter(levelKey => levelKey !== referenceLevel)
+        .map(levelKey => {
+            const blocks = getCoreBlocksForLevel(levelKey);
+            if (blocks.length === 0) return null;
+            const sig = getCoreSignature(blocks);
+            const matches = coreSignaturesMatch(sig, referenceSig);
+            return { levelKey, blocks, sig, matches, centroid: getCoreCentroid(blocks), angle: blocks[0].angle || 0 };
+        })
+        .filter(Boolean);
+
+    if (candidates.length === 0) {
+        document.getElementById('status-bar').textContent = 'No other levels have core elements to align.';
+        return;
+    }
+
+    const existing = document.getElementById('core-align-picker-overlay');
+    if (existing) existing.remove();
+
+    const rows = candidates.map(c => {
+        const checkbox = el('input', { type: 'checkbox', id: `core-align-chk-${c.levelKey}` });
+        checkbox.checked = c.matches;
+        const badge = c.matches
+            ? el('span', { style: { color: '#2e7d32', fontSize: '0.8em', marginLeft: '8px' } }, ['\u2713 matches reference'])
+            : el('span', { style: { color: '#e65100', fontSize: '0.8em', marginLeft: '8px' } },
+                [`\u26a0 ${c.sig.count} core block(s) vs ${referenceSig.count} on reference - sizes differ, double-check before aligning`]);
+        const row = el('div', { style: { display: 'flex', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #f0f0f0' } },
+            [checkbox, el('label', { for: `core-align-chk-${c.levelKey}`, style: { marginLeft: '6px' } }, [c.levelKey.replace(/_/g, ' ')]), badge]);
+        row._candidate = c;
+        row._checkbox = checkbox;
+        return row;
+    });
+
+    const rowsContainer = el('div', { style: { maxHeight: '260px', overflowY: 'auto', margin: '10px 0' } }, rows);
+
+    const confirmBtn = el('button', {
+        class: 'active',
+        onclick: () => {
+            let alignedCount = 0;
+            rows.forEach(row => {
+                if (!row._checkbox.checked) return;
+                const c = row._candidate;
+                const deltaAngle = referenceAngle - c.angle;
+                alignOneLevelCore(c.blocks, c.centroid, referenceCentroid, deltaAngle);
+                alignedCount++;
+            });
+            state.canvas.renderAll();
+            if (alignedCount > 0) recordAction('ALIGN_CORE', { referenceLevel, alignedCount });
+            document.getElementById('status-bar').textContent = alignedCount > 0
+                ? `Aligned core position + rotation on ${alignedCount} level(s).`
+                : 'No levels selected - nothing aligned.';
+            overlay.remove();
+        }
+    }, ['Align Selected Levels']);
+    const cancelBtn = el('button', { style: { marginLeft: '8px' }, onclick: () => overlay.remove() }, ['Cancel']);
+
+    const panel = el('div', {
+        style: {
+            background: '#fff', borderRadius: '6px', padding: '20px', width: '420px', maxWidth: '90vw',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+        }
+    }, [
+        el('h3', { style: { marginTop: '0' } }, ['Align Vertical Core']),
+        el('div', { style: { fontSize: '0.85em', color: '#666', marginBottom: '8px' } },
+            [`Reference level: Typical Floor (${referenceSig.count} core block(s)). Levels whose core doesn't match in count/size are unchecked by default - review before including them.`]),
+        rowsContainer,
+        el('div', { style: { marginTop: '10px', textAlign: 'right' } }, [cancelBtn, confirmBtn])
+    ]);
+
+    const overlay = el('div', {
+        id: 'core-align-picker-overlay',
+        style: {
+            position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.5)', zIndex: '10000', display: 'flex',
+            alignItems: 'center', justifyContent: 'center'
+        }
+    }, [panel]);
+    document.body.appendChild(overlay);
 }
 // --- Mode Entry/Exit ---
 function enterMode(mode, data = null) {
@@ -13017,6 +13510,7 @@ function performCalculations() {
     if (state.projectType === 'Residential' && state.currentProgram && typicalFootprints.length > 0) {
         const program = state.currentProgram;
         const calcMode = document.getElementById('apartment-calc-mode').value;
+        const arrangementMode = getSelectedArrangementMode();
         const doubleLoaded = document.getElementById('double-loaded-corridor').checked;
         const balconyPlacement = document.getElementById('balcony-placement').value;
         const includeBalconiesInOffset = balconyPlacement === 'recessed';
@@ -13034,7 +13528,7 @@ function performCalculations() {
             const manualCountsPerFloor = aptMixWithCounts.reduce((acc, apt) => ({ ...acc, [apt.key]: apt.countPerFloor }), {});
             if (Object.values(manualCountsPerFloor).some(c => c > 0)) {
                 typicalFootprints.forEach((footprint) => {
-                    const layoutResult = layoutFlatsOnPolygon(footprint, manualCountsPerFloor, includeBalconiesInOffset, calcMode, doubleLoaded); if (layoutResult.corridorArea > 0) { corridorTotalArea += layoutResult.corridorArea; }
+                    const layoutResult = layoutFlatsOnPolygon(footprint, manualCountsPerFloor, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode); if (layoutResult.corridorArea > 0) { corridorTotalArea += layoutResult.corridorArea; }
                 });
             }
         } else if (gfaAvailableForResidential > 0) {
@@ -13083,7 +13577,7 @@ function performCalculations() {
                 const bestFit = findBestFit(wingAptAreaPerFloor, wingPerimeter, fittingUnitTypes, doubleLoaded);
 
                 // Run actual layout to get real counts
-                const layoutResult = layoutFlatsOnPolygon(footprint, bestFit.counts, includeBalconiesInOffset, calcMode, doubleLoaded);
+                const layoutResult = layoutFlatsOnPolygon(footprint, bestFit.counts, includeBalconiesInOffset, calcMode, doubleLoaded, arrangementMode);
                 if (layoutResult.corridorArea > 0) {
                     corridorTotalArea += layoutResult.corridorArea;
                 }
@@ -16569,6 +17063,11 @@ async function loadSession(sessionName) {
                     }
                 });
                 canvas.renderAll();
+                // This is a different project's geometry - old scenario tabs
+                // no longer apply. Wrap what just loaded into a fresh "Scenario 1".
+                state.scenarios = null;
+                state.activeScenarioId = null;
+                ensureDefaultScenario();
                 updateUI();
                 document.getElementById('status-bar').textContent = `Loaded session: ${sessionName}`;
             });
@@ -16644,6 +17143,12 @@ async function importSessionFromJSON(file) {
             const canvas = state.canvas;
             resetState(true);
             canvas.clear();
+            // JSON session exports never embed the PDF/image binary (too
+            // heavy for JSON) - show the placeholder until the person
+            // reloads their plan via "2. Site Plan & Scale". Reloading a
+            // plan no longer clears geometry, so this is safe to do now.
+            setBackgroundPlaceholder();
+            syncOverlayCanvasSize();
 
             if (data.scale && data.scale.pixels > 0) setScale(data.scale.pixels, data.scale.meters);
             state.projectType = data.projectType || 'Residential';
@@ -16682,6 +17187,11 @@ async function importSessionFromJSON(file) {
                 }
 
                 canvas.renderAll();
+                // Different project's geometry just replaced the canvas -
+                // old scenario tabs no longer apply.
+                state.scenarios = null;
+                state.activeScenarioId = null;
+                ensureDefaultScenario();
                 updateUI();
                 document.getElementById('status-bar').textContent = `✓ Session imported from JSON (${objects.length} objects restored).`;
             });
@@ -17307,7 +17817,102 @@ function drawBusBay(startPt, endPt, vehicleKey, circulationMarginM = 1.5) {
     return group;
 }
 
-// Draws the turning envelope for a vehicle at a given center point:
+// --- Bus parking ROW (multiple bays + a drive lane), mirroring the car
+// parking row generator (calculateBaysForLength/createParkingGeometry/
+// generateLinearParking) but sized off the selected AASHTO vehicle
+// template instead of the fixed car-bay constants.
+const BUS_LANE_WIDTH_M = 10.0; // EDIT per local code - buses need a wider maneuvering aisle than cars (typical bus depot aisle is ~10-12m so a bus can swing into a bay)
+
+function calculateBusBaysForLength(lineLengthMeters, vehicleKey, circulationMarginM = 1.5) {
+    const template = VEHICLE_TEMPLATES[vehicleKey];
+    if (!template) return 0;
+    const bayLengthM = template.length + circulationMarginM;
+    return Math.max(0, Math.floor(lineLengthMeters / bayLengthM));
+}
+
+function createBusParkingGeometry(lineLengthMeters, vehicleKey, totalBayCount, scaleRatio, circulationMarginM = 1.5) {
+    const template = VEHICLE_TEMPLATES[vehicleKey];
+    const bayLengthM = template.length + circulationMarginM;
+    const bayWidthM = template.width + circulationMarginM;
+    const bayLengthPx = bayLengthM / scaleRatio;
+    const bayWidthPx = bayWidthM / scaleRatio;
+    const laneWidthPx = BUS_LANE_WIDTH_M / scaleRatio;
+
+    const objects = [];
+    for (let i = 0; i < totalBayCount; i++) {
+        const bay = new fabric.Rect({
+            width: bayLengthPx, height: bayWidthPx,
+            left: (i * bayLengthM + bayLengthM / 2) / scaleRatio, top: bayWidthPx / 2,
+            originX: 'center', originY: 'center',
+            fill: 'rgba(255, 193, 7, 0.35)', stroke: '#ff8f00', strokeWidth: 1.5,
+            strokeUniform: true
+        });
+        objects.push(bay);
+    }
+    // Drive lane (driveway indication) below the row of bays, same visual
+    // pattern as car parking's LANE_W rectangle.
+    const driveLane = new fabric.Rect({
+        width: lineLengthMeters / scaleRatio, height: laneWidthPx,
+        fill: 'rgba(100, 100, 100, 0.3)',
+        left: 0, top: bayWidthPx, originX: 'left', originY: 'top'
+    });
+    objects.push(driveLane);
+    const bayCountText = new fabric.Text(String(totalBayCount), {
+        left: (lineLengthMeters / 2) / scaleRatio, top: bayWidthPx + laneWidthPx / 2,
+        originX: 'center', originY: 'center', fontSize: 16, fill: 'black', backgroundColor: 'rgba(255,255,255,0.7)'
+    });
+    objects.push(bayCountText);
+    return objects;
+}
+
+// Click-two-points row generator, matching generateLinearParking's UX and
+// centering approach exactly, so a bus row behaves like a car parking row
+// on the canvas (selectable as one group, draggable, resizable).
+function generateBusParkingRow(startPt, endPt, vehicleKey) {
+    const template = VEHICLE_TEMPLATES[vehicleKey];
+    if (!template) { console.warn('[BusParkingRow] Unknown vehicle key:', vehicleKey); return null; }
+    if (state.scale.ratio === 0) {
+        document.getElementById('status-bar').textContent = 'Please set the scale before drawing a bus parking row.';
+        return null;
+    }
+    const dx = endPt.x - startPt.x, dy = endPt.y - startPt.y;
+    const lineLengthMeters = Math.hypot(dx, dy) * state.scale.ratio;
+    if (lineLengthMeters === 0) return null;
+
+    const totalBayCount = calculateBusBaysForLength(lineLengthMeters, vehicleKey);
+    if (totalBayCount < 1) {
+        document.getElementById('status-bar').textContent = `Line too short for even one ${template.label} bay.`;
+        return null;
+    }
+    const objectsInRow = createBusParkingGeometry(lineLengthMeters, vehicleKey, totalBayCount, state.scale.ratio);
+
+    const tempGroup = new fabric.Group(objectsInRow);
+    const groupWidth = tempGroup.width, groupHeight = tempGroup.height;
+    objectsInRow.forEach(obj => { obj.left -= groupWidth / 2; obj.top -= groupHeight / 2; });
+
+    const midPt = { x: (startPt.x + endPt.x) / 2, y: (startPt.y + endPt.y) / 2 };
+    const group = new fabric.Group(objectsInRow, {
+        left: midPt.x, top: midPt.y,
+        angle: Math.atan2(dy, dx) * 180 / Math.PI,
+        originX: 'center', originY: 'center',
+        // NOTE: deliberately NOT tagged isParkingRow / pushed into
+        // state.parkingRows - that flag triggers car-parking-specific
+        // machinery elsewhere (regenerateParkingInGroup on resize reads
+        // group.parkingParams.parkingType, which this group doesn't have,
+        // and would throw). isBusParkingRow is this feature's own flag;
+        // deleteSelectedObject()'s generic canvas.remove() fallback still
+        // handles cleanup fine without special-casing it.
+        isBusParkingRow: true, level: state.currentLevel,
+        vehicleKey, busBayCount: totalBayCount,
+        lockScalingY: true
+    });
+    state.canvas.add(group);
+    state.canvas.setActiveObject(group).renderAll();
+    document.getElementById('status-bar').textContent = `Bus parking row placed: ${totalBayCount} ${template.label} bay(s) + ${BUS_LANE_WIDTH_M}m drive lane.`;
+    return group;
+}
+
+
 // - dashed circle at the AASHTO centerline turning radius (CTR)
 // - solid circle at the AASHTO minimum design turning radius (outer sweep)
 // - solid circle at the minimum inside radius (inner sweep / kerb clearance)
@@ -17761,6 +18366,26 @@ function getActivePolygonPoints() {
     return null;
 }
 
+// Wraps content in the SAME collapsible header/content structure and CSS
+// classes (.collapsible-header / .panel-toggle-indicator / .collapsible-
+// content) used by the rest of the sidebar, so these dynamically-injected
+// panels collapse/expand exactly like every other numbered section. Wires
+// its own click handler rather than relying on the page's global
+// initCollapsibleSections() sweep, since that runs once at startup and
+// these panels are injected afterward - re-running it would risk double-
+// registering listeners on the already-existing static sections.
+function makeCollapsibleSection(title, contentChildren) {
+    const indicator = el('span', { class: 'panel-toggle-indicator' }, ['\u2212']);
+    const header = el('h3', { class: 'collapsible-header' }, [title + ' ', indicator]);
+    const content = el('div', { class: 'collapsible-content' }, contentChildren);
+    header.addEventListener('click', () => {
+        header.classList.toggle('collapsed');
+        content.classList.toggle('collapsed');
+        indicator.textContent = content.classList.contains('collapsed') ? '+' : '\u2212';
+    });
+    return el('div', { class: 'control-group', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' } }, [header, content]);
+}
+
 function buildParkingAutoFillPanel() {
     const scenarioSelect = el('select', { id: 'parking-fill-scenario', class: 'param-input', style: { width: '100%', marginBottom: '6px' } },
         Object.entries(PARKING_FILL_SCENARIOS).map(([key, s]) => el('option', { value: key, title: s.description }, [s.label]))
@@ -17780,10 +18405,7 @@ function buildParkingAutoFillPanel() {
         }
     }, ['Auto-Fill Parking to Plot']);
 
-    return el('div', { id: 'parking-autofill-panel', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' } }, [
-        el('h4', {}, ['Auto-Fill Parking']),
-        scenarioSelect, hint, btn
-    ]);
+    return makeCollapsibleSection('Auto-Fill Parking', [scenarioSelect, hint, btn]);
 }
 
 function buildBusBayPanel() {
@@ -17792,8 +18414,9 @@ function buildBusBayPanel() {
     );
     const status = el('div', { id: 'bus-tool-hint', style: { fontSize: '0.75em', color: '#666', marginBottom: '6px', minHeight: '1.2em' } });
 
-    let armedTool = null; // 'bay-start' | 'bay-end' | 'template'
+    let armedTool = null; // 'bay-start' | 'bay-end' | 'row-start' | 'row-end' | 'template'
     let bayStartPt = null;
+    let rowStartPt = null;
 
     const setHint = (text) => { status.textContent = text; };
 
@@ -17809,6 +18432,13 @@ function buildBusBayPanel() {
             drawBusBay(bayStartPt, pointer, vehicleKey);
             armedTool = null; bayStartPt = null;
             setHint('Bus bay placed.');
+        } else if (armedTool === 'row-start') {
+            rowStartPt = pointer;
+            armedTool = 'row-end';
+            setHint('Click the end point of the bus parking row...');
+        } else if (armedTool === 'row-end') {
+            generateBusParkingRow(rowStartPt, pointer, vehicleKey);
+            armedTool = null; rowStartPt = null;
         } else if (armedTool === 'template') {
             const group = drawTurningTemplate(pointer, vehicleKey);
             if (group) validateTurningClearance(group);
@@ -17824,6 +18454,14 @@ function buildBusBayPanel() {
         }
     }, ['Draw Bus Bay']);
 
+    const rowBtn = el('button', {
+        style: { marginLeft: '6px' },
+        onclick: () => {
+            armedTool = 'row-start';
+            setHint('Click the start point of the bus parking row (multiple bays + drive lane, like a car parking row)...');
+        }
+    }, ['Draw Bus Parking Row']);
+
     const templateBtn = el('button', {
         style: { marginLeft: '6px' },
         onclick: () => {
@@ -17832,12 +18470,12 @@ function buildBusBayPanel() {
         }
     }, ['Place Turning Template']);
 
-    const panel = el('div', { id: 'bus-bay-panel', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' } }, [
-        el('h4', {}, ['School Bus Bay / Turning Radius (AASHTO)']),
+    const panelContent = [
         vehicleSelect,
-        el('div', {}, [bayBtn, templateBtn]),
+        el('div', {}, [bayBtn, rowBtn, templateBtn]),
         status
-    ]);
+    ];
+    const panel = makeCollapsibleSection('School Bus Bay / Turning Radius (AASHTO)', panelContent);
 
     // Wire once the canvas exists.
     const attach = () => { if (state.canvas) state.canvas.on('mouse:down', onCanvasClick); };
@@ -17870,6 +18508,14 @@ function buildRampFlowPanel() {
         style: { marginLeft: '6px' },
         onclick: () => { armedRampKey = 'Exit_Ramp_3.0_2.7'; setHint('Click the plan to place the Exit Ramp (3.0m x 2.7m)...'); }
     }, ['Place Exit Ramp']);
+    const flipBtn = el('button', {
+        style: { marginLeft: '6px' },
+        onclick: () => flipSelectedRampDirection()
+    }, ['Flip Ramp Direction']);
+    const joinBtn = el('button', {
+        style: { marginTop: '6px' },
+        onclick: () => detectAndOfferRampJoins()
+    }, ['Detect & Join 90° Ramps']);
 
     const deriveBtn = el('button', {
         style: { marginTop: '6px' },
@@ -17880,14 +18526,15 @@ function buildRampFlowPanel() {
         onclick: () => clearParkingFlow(state.currentLevel)
     }, ['Clear Flow Diagram']);
 
-    return el('div', { id: 'ramp-flow-panel', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd' } }, [
-        el('h4', {}, ['Ramps & Parking Flow']),
-        el('div', {}, [entryBtn, exitBtn]),
+    const panelContent = [
+        el('div', {}, [entryBtn, exitBtn, flipBtn]),
+        el('div', {}, [joinBtn]),
         el('div', {}, [deriveBtn, clearBtn]),
         el('div', { style: { fontSize: '0.75em', color: '#666', margin: '6px 0' } },
-            ['Place one ramp of each type on the current level, then Derive Parking Flow to draw the entry -> aisle -> exit circulation path (dashed arrows).']),
+            ['Place one ramp of each type on the current level (arrows show drive direction - select a ramp and click Flip Ramp Direction if it\'s backwards). Detect & Join finds same-direction ramp pairs meeting at ~90° and offers to connect them with a curved ramp (3.0-7.5m radius). Derive Parking Flow draws the entry -> aisle -> exit circulation path.']),
         status
-    ]);
+    ];
+    return makeCollapsibleSection('Ramps & Parking Flow', panelContent);
 }
 
 function initUIExtensions() {
