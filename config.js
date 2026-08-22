@@ -187,7 +187,7 @@ export const AREA_STATEMENT_DATA = [
     { name: "BTU Meter Room", key: "BTU_Meter_Room_2.5_2.5", level: "Ground_Floor", type: "service", w: 2.5, h: 2.5 },
     { name: "Comm_Staircase_GF", key: "Comm_Staircase_GF_6_3", level: "Ground_Floor", type: "gfa", w: 6, h: 3, role: 'staircase' },
     { name: "Control Room", key: "Control_Room_19_1", level: "Ground_Floor", type: "service", w: 19, h: 1 },
-    { name: "Corridor (GF)", key: "Corridor_GF_6.5_1.8", level: "Ground_Floor", type: "gfa", w: 6.5, h: 1.8 },
+    { name: "Corridor GF", key: "Corridor_GF_6.5_1.8", level: "Ground_Floor", type: "gfa", w: 6.5, h: 1.8 },
     { name: "ETS Room", key: "ETS_Room_9_9", level: "Ground_Floor", type: "service", w: 9, h: 9 },
     { name: "Electrical Room", key: "Electrical_Room_3_3", level: "Ground_Floor", type: "service", w: 3, h: 3 },
     { name: "Entrance Lobby", key: "Entrance_Lobby_8_12", level: "Ground_Floor", type: "gfa", w: 8, h: 12 },
@@ -219,17 +219,17 @@ export const AREA_STATEMENT_DATA = [
     { name: "Electrical Room (Mezzanine)", key: "Electrical_Room_Mezzanine_4_3.5", level: "Mezzanine", type: "service", w: 4, h: 3.5 },
     { name: "Lift_Mezzanine", key: "Lift_Mezzanine_2.4_2.4", level: "Mezzanine", type: "gfa", w: 2.4, h: 2.4 },
     { name: "Water Meter (Mezzanine)", key: "Water_Meter_Mezzanine_1.7_1.7", level: "Mezzanine", type: "service", w: 1.7, h: 1.7 },
-    { name: "Comm. Corridor (Typical)", key: "Comm_Corridor_Typical_21_1.8", level: "Typical_Floor", type: "gfa", w: 21, h: 1.8 },
-    { name: "Comm. Electrical Room", key: "Comm_Electrical_Room_10_1", level: "Typical_Floor", type: "service", w: 10, h: 1 },
-    { name: "Comm. Garbage Chute", key: "Comm_Garbage_Chute_2.7_1.5", level: "Typical_Floor", type: "service", w: 2.7, h: 1.5 },
-    { name: "Comm. Lift Corridor", key: "Comm_Lift_Corridor_6.6_2.4", level: "Typical_Floor", type: "gfa", w: 6.6, h: 2.4 },
+    { name: "Comm_Corridor_Typical", key: "Comm_Corridor_Typical_21_1.8", level: "Typical_Floor", type: "gfa", w: 21, h: 1.8 },
+    { name: "Comm_Electrical_Room", key: "Comm_Electrical_Room_10_1", level: "Typical_Floor", type: "service", w: 10, h: 1 },
+    { name: "Comm_Garbage_Chute", key: "Comm_Garbage_Chute_2.7_1.5", level: "Typical_Floor", type: "service", w: 2.7, h: 1.5 },
+    { name: "Comm_Lift_Corridor", key: "Comm_Lift_Corridor_6.6_2.4", level: "Typical_Floor", type: "gfa", w: 6.6, h: 2.4 },
     { name: "Comm_Staircase_Typical", key: "Comm_Staircase_Typical_6_3", level: "Typical_Floor", type: "gfa", w: 6, h: 3, role: 'staircase' },
-    { name: "Comm. Tele Room", key: "Comm_Tele_Room_2.4_3.5", level: "Typical_Floor", type: "service", w: 2.4, h: 3.5 },
-    { name: "Comm. Water Meter", key: "Comm_Water_Meter_1.7_1.7", level: "Typical_Floor", type: "service", w: 1.7, h: 1.7 },
-    { name: "Comm. Water Meter", key: "Comm_Water_Meter_4_1", level: "Typical_Floor", type: "service", w: 4, h: 1 },
+    { name: "Comm_Tele_Room", key: "Comm_Tele_Room_2.4_3.5", level: "Typical_Floor", type: "service", w: 2.4, h: 3.5 },
+    { name: "Comm_Water_Meter", key: "Comm_Water_Meter_1.7_1.7", level: "Typical_Floor", type: "service", w: 1.7, h: 1.7 },
+    { name: "Comm_Water_Meter", key: "Comm_Water_Meter_4_1", level: "Typical_Floor", type: "service", w: 4, h: 1 },
     { name: "Lift_Typical", key: "Lift_Typical_2.4_2.4", level: "Typical_Floor", type: "gfa", w: 2.4, h: 2.4},
     { name: "Shaft", key: "Shaft_2_2", level: "Typical_Floor", type: "service", w: 2.0, h: 2.0},
-    { name: "Comm. Gym", key: "Comm_Gym_583_1", level: "Roof", type: "service", w: 583, h: 1 },
+    { name: "Comm_Gym", key: "Comm_Gym_16_35", level: "Roof", type: "service", w: 16, h: 35 },
     { name: "Comm. Service (Roof)", key: "Comm_Service_Roof_124_1", level: "Roof", type: "service", w: 124, h: 1 },
     { name: "Electrical Room", key: "Electrical_Room_3_3.2", level: "Roof", type: "service", w: 3, h: 3.2 },
     { name: "Garbage Chute", key: "Garbage_Chute_2.7_1.5", level: "Roof", type: "service", w: 2.7, h: 1.5 },
@@ -253,7 +253,7 @@ export const AREA_STATEMENT_DATA = [
 
 export const PREDEFINED_COMPOSITE_BLOCKS = [
     { name: "Residential Core 1", level: "Typical_Floor", blocks: [ { key: "Comm_Staircase_Typical_6_3", x: 0, y: 0 }, { key: "Comm_Staircase_Typical_6_3", x: 8.8, y: 0 }, { key: "Lift_Typical_2.4_2.4", x: 6.2, y: 0 }, { key: "Lift_Typical_2.4_2.4", x: 6.2, y: 2.6 }, { key: "Shaft_2_2", x: 6.3, y: 5.2 } ] },
-    { name: "Ground Floor Core", level: "Ground_Floor", blocks: [ { key: "Comm_Staircase_GF_6_3", x: 0, y: 8 }, { key: "Comm_Staircase_GF_6_3", x: 23, y: 8 }, { key: "Lift_GF_2.4_2.4", x: 7, y: 8.3 }, { key: "Lift_GF_2.4_2.4", x: 9.6, y: 8.3 }, { key: "Shaft_2_2", x: 8.8, y: 2.9 }, { key: "Comm_Garbage_Chute_2.7_1.5", x: 6, y: 2.9 }, { key: "Electrical_Room_3_3", x: 0, y: 3.2 }, { key: "Substation_6.5_5", x: 20.5, y: 11.5 }, { key: "LV_Room_5.1_8.6", x: 15.2, y: 12 }, { key: "ETS_Room_9_9", x: 0, y: 11.5 }, { key: "Pump_Room_8.5_8", x: 9.2, y: 12 }, { key: "Garbage_Room_8_1", x: 0, y: 20.7 }, { key: "Telephone_Room_5.1_4", x: 20.5, y: 22.2 }, { key: "Electrical_Room_3_3", x: 25.8, y: 22.2 }, { key: "Water_Meter_Podium_1.7_1.7", x: 29, y: 24.5 }, { key: "Control_Room_19_1", x: 0, y: 0 },{ key: "Entrance_Lobby_8_12", x: 0, y: 0 }  ] },
+    { name: "Ground Floor Core", level: "Ground_Floor", blocks: [{ key: "Corridor_GF_6.5_1.8", x: 0, y: 8 }, { key: "Comm_Staircase_GF_6_3", x: 0, y: 8 }, { key: "Comm_Staircase_GF_6_3", x: 23, y: 8 }, { key: "Lift_GF_2.4_2.4", x: 7, y: 8.3 }, { key: "Lift_GF_2.4_2.4", x: 9.6, y: 8.3 }, { key: "Shaft_2_2", x: 8.8, y: 2.9 }, { key: "Comm_Garbage_Chute_2.7_1.5", x: 6, y: 2.9 }, { key: "Electrical_Room_3_3", x: 0, y: 3.2 }, { key: "Substation_6.5_5", x: 20.5, y: 11.5 }, { key: "LV_Room_5.1_8.6", x: 15.2, y: 12 }, { key: "ETS_Room_9_9", x: 0, y: 11.5 }, { key: "Pump_Room_8.5_8", x: 9.2, y: 12 }, { key: "Garbage_Room_8_1", x: 0, y: 20.7 }, { key: "Telephone_Room_5.1_4", x: 20.5, y: 22.2 }, { key: "Electrical_Room_3_3", x: 25.8, y: 22.2 }, { key: "Water_Meter_Podium_1.7_1.7", x: 29, y: 24.5 }, { key: "Control_Room_19_1", x: 0, y: 0 },{ key: "Entrance_Lobby_8_12", x: 0, y: 0 }  ] },
     { name: "Podium Floor Core", level: "Podium", blocks: [ { key: "Comm_Staircase_Podium_6_3", x: 0, y: 0 }, { key: "Comm_Staircase_Podium_6_3", x: 14.8, y: 0 }, { key: "Lift_Podium_2.4_2.4", x: 6.2, y: 0.3 }, { key: "Lift_Podium_2.4_2.4", x: 8.8, y: 0.3 }, { key: "Corridor_Podium_12.8_2.4", x: 1.8, y: 3 }, { key: "Electrical_Room_Podium_4_3.5", x: 0, y: 3.2 }, { key: "Telephone_Room_5.1_4", x: 4.2, y: 5.6 }, { key: "Garbage_Room_8_1", x: 9.5, y: 5.6 }, { key: "Water_Meter_Podium_1.7_1.7", x: 17.7, y: 5.6 } ] },
     { name: "Mezzanine Floor Core", level: "Mezzanine", blocks: [ { key: "Comm_Staircase_Mezzanine_6_3", x: 0, y: 0 }, { key: "Comm_Staircase_Mezzanine_6_3", x: 14.8, y: 0 }, { key: "Lift_Mezzanine_2.4_2.4", x: 6.2, y: 0.3 }, { key: "Lift_Mezzanine_2.4_2.4", x: 8.8, y: 0.3 }, { key: "Corridor_Mezzanine_12.8_2.4", x: 1.8, y: 3 }, { key: "Electrical_Room_Mezzanine_4_3.5", x: 0, y: 3.2 }, { key: "Telephone_Room_5.1_4", x: 4.2, y: 5.6 }, { key: "Garbage_Room_8_1", x: 9.5, y: 5.6 }, { key: "Water_Meter_Mezzanine_1.7_1.7", x: 17.7, y: 5.6 } ] },
     { name: "Basement Floor Core", level: "Basement", blocks: [ { key: "Comm_Staircase_Basement_6_3", x: 0, y: 0 }, { key: "Comm_Staircase_Basement_6_3", x: 14.8, y: 0 }, { key: "Lift_Basement_2.4_2.4", x: 6.2, y: 0.3 }, { key: "Lift_Basement_2.4_2.4", x: 8.8, y: 0.3 }, { key: "Lift_Basement_2.4_2.4", x: 6.2, y: 2.9 }, { key: "Lift_Basement_2.4_2.4", x: 8.8, y: 2.9 }, { key: "Lift_Corridor_GF_10_2.4", x: 3.5, y: 5.5 }, { key: "Electrical_Room_3_3", x: 0, y: 3.2 }, { key: "Telephone_Room_5.1_4", x: 3.2, y: 8.1 }, { key: "Garbage_Room_8_1", x: 8.5, y: 8.1 }, { key: "Water_Meter_Podium_1.7_1.7", x: 16.7, y: 8.1 }, { key: "GSM_Room_3_3", x: 17, y: 3.2 } ] },
@@ -420,7 +420,15 @@ AREA_STATEMENT_DATA.forEach(item => {
 // ******************************************************************
 // ***** NEW DATA FOR MARKET RATE CALCULATOR *****
 // ******************************************************************
-
+PREDEFINED_COMPOSITE_BLOCKS.forEach(composite => {
+    composite.blocks.forEach(b => {
+        const ref = PREDEFINED_BLOCKS[b.key];
+        if (ref) {
+            if (b.w === undefined) b.w = ref.width;
+            if (b.h === undefined) b.h = ref.height;
+        }
+    });
+});
 export const DUBAI_LOCATIONS = [
     // Historic Core & North Dubai
     { id: 'al_ras', name: 'Al Ras', lat: 25.2648, lng: 55.2963 },

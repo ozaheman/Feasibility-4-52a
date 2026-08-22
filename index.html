@@ -41,12 +41,29 @@
                 <button id="export-zip-btn" style="height:45px; padding:0; margin:0;">Export ZIP</button>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                <button id="save-session-btn" class="button success" style="height:45px; padding:0; margin:0;">Save Session</button>
+                <button id="save-session-btn" class="button success" style="height:45px; padding:0; margin:0;">Save
+                    Session</button>
                 <select id="load-session-select" class="param-input" style="height:45px; width:100%; margin:0;">
                     <option value="">Load Session...</option>
                 </select>
             </div>
-            <button id="manage-sessions-btn" style="width:100%; margin-top:10px; height:45px; padding:0;">Manage Sessions</button>
+            <button id="manage-sessions-btn" style="width:100%; margin-top:10px; height:45px; padding:0;">Manage
+                Sessions</button>
+            <!-- Feature 1: JSON Session Export / Import -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                <button onclick="window.triggerExportSessionJSON()"
+                    style="height:40px; padding:0; background-color:#546e7a; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;"
+                    title="Export current session as a JSON file for backup or sharing">
+                    ⬇ Export JSON
+                </button>
+                <label
+                    style="height:40px; display:flex; align-items:center; justify-content:center; background-color:#37474f; color:white; border-radius:4px; cursor:pointer; font-size:0.85em; margin:0;"
+                    title="Import a previously exported session JSON file">
+                    ⬆ Import JSON
+                    <input type="file" id="import-session-json-upload" accept=".json" style="display:none;"
+                        onchange="window.handleImportSessionJSONFile(event)">
+                </label>
+            </div>
         </div>
         <div class="control-group">
             <h3>2. Site Plan & Scale</h3>
@@ -289,9 +306,10 @@
                 style="background:white; padding:30px; border-radius:8px; width:600px; max-width:90vw; box-shadow:0 4px 20px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <h2 style="margin:0;">Manage Sessions</h2>
-                    <button id="close-sessions-modal-btn" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#666;">&times;</button>
+                    <button id="close-sessions-modal-btn"
+                        style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#666;">&times;</button>
                 </div>
-                
+
                 <div style="overflow-y:auto; flex-grow:1; border:1px solid #eee; border-radius:4px; padding:10px;">
                     <table style="width:100%; border-collapse:collapse; text-align:left;">
                         <thead>
@@ -684,6 +702,42 @@
                     </label>
                 </div>
 
+                <!-- Feature 2 & 3: Geometry Controls (visible when imported geometry is selected) -->
+                <div id="geometry-controls-wrapper"
+                    style="display:none; margin-top:10px; padding:8px; background:#e8f4fd; border-radius:4px; border-left:3px solid #1976d2;">
+                    <div style="font-size:0.8em; font-weight:bold; color:#1976d2; margin-bottom:6px;">Geometry Actions
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:5px;">
+                        <button id="group-geometry-btn" onclick="window.groupGeometry()"
+                            style="display:none; padding:5px 10px; font-size:0.8em; background-color:#1565c0; color:white; border:none; border-radius:3px; cursor:pointer;"
+                            title="Group selected imported geometry objects together">
+                            ⊞ Group
+                        </button>
+                        <button id="explode-geometry-btn" onclick="window.explodeGeometryGroup()"
+                            style="display:none; padding:5px 10px; font-size:0.8em; background-color:#6a1b9a; color:white; border:none; border-radius:3px; cursor:pointer;"
+                            title="Explode selected geometry group back into individual objects">
+                            ⊟ Explode
+                        </button>
+                        <button id="link-geometry-btn" onclick="window.linkSelectedGeometryToBlock()"
+                            style="display:none; padding:5px 10px; font-size:0.8em; background-color:#00695c; color:white; border:none; border-radius:3px; cursor:pointer;"
+                            title="Select this block + a geometry on canvas (shift-click), then click to link">
+                            🔗 Link to Block
+                        </button>
+                        <button id="group-blocks-btn" onclick="window.groupServiceBlocks()"
+                            style="display:none; padding:5px 10px; font-size:0.8em; background-color:#1565c0; color:white; border:none; border-radius:3px; cursor:pointer;"
+                            title="Group selected service blocks together into one composite">
+                            ⊞ Group Blocks
+                        </button>
+                        <button id="ungroup-blocks-btn" onclick="window.ungroupServiceBlocks()"
+                            style="display:none; padding:5px 10px; font-size:0.8em; background-color:#6a1b9a; color:white; border:none; border-radius:3px; cursor:pointer;"
+                            title="Ungroup the selected composite back into individual service blocks">
+                            ⊟ Ungroup Blocks
+                        </button>
+                    </div>
+                    <div id="geo-controls-tip"
+                        style="display:none; font-size:0.75em; color:#555; margin-top:5px; font-style:italic;"></div>
+                </div>
+
                 <div class="button-grid">
                     <button id="toggle-lock-btn" class="lock-btn locked">🔒 Locked</button>
                     <button id="edit-group-btn" class="warning">Edit Group</button>
@@ -733,7 +787,18 @@
                 </div>
                 <button id="delete-block-btn" class="danger" style="margin-top:5px;">Delete Object</button>
             </div>
-            <h4 style="margin-top:15px;">Placed Service Blocks</h4>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:15px;">
+                <h4 style="margin:0;">Placed Service Blocks</h4>
+                <div style="display:flex; gap:4px;">
+                    <button onclick="window.refreshServiceBlockLabels()"
+                        style="padding:3px 7px; font-size:0.75em; background-color:#1565c0; color:white; border:none; border-radius:3px; cursor:pointer;"
+                        title="Refresh block ID + name tags on all placed service blocks">🏷 Labels</button>
+                    <button onclick="window.auditServiceBlockAreas()"
+                        style="padding:3px 7px; font-size:0.75em; background-color:#e65100; color:white; border:none; border-radius:3px; cursor:pointer;"
+                        title="Review every service block (tags, area, link status) and choose which unlinked ones to delete">🔍
+                        Audit</button>
+                </div>
+            </div>
             <div id="service-block-list"
                 style="font-size:0.8em; max-height: 150px; overflow-y:auto; border: 1px solid #eee; padding: 5px; margin-top: 5px;">
             </div>
@@ -742,14 +807,18 @@
         <div class="control-group">
             <h3>7. Composite Blocks</h3>
             <p style="font-size:0.85em; margin-top:-5px; margin-bottom:10px;">Manage and place building cores.</p>
-            
-            <div id="composite-preview-wrapper" style="margin-bottom: 15px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+
+            <div id="composite-preview-wrapper"
+                style="margin-bottom: 15px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
                 <h4 style="margin-top: 0; font-size: 0.9em;">Core Requirements Preview</h4>
-                <div id="composite-preview-container" style="display: flex; gap: 10px; overflow-x: auto; padding-top: 25px; min-height: 100px; position: relative;">
+                <div id="composite-preview-container"
+                    style="display: flex; gap: 10px; overflow-x: auto; padding-top: 25px; min-height: 100px; position: relative;">
                     <!-- Blocks will be rendered here dynamically -->
-                    <p style="color: #999; font-size: 0.8em; text-align: center; width: 100%;">Calculate to see requirements</p>
+                    <p style="color: #999; font-size: 0.8em; text-align: center; width: 100%;">Calculate to see
+                        requirements</p>
                 </div>
-                <button id="draw-from-preview-btn" disabled style="margin-top: 10px; font-size: 0.9em; padding: 8px;">Draw Composite Object</button>
+                <button id="draw-from-preview-btn" disabled
+                    style="margin-top: 10px; font-size: 0.9em; padding: 8px;">Draw Composite Object</button>
             </div>
 
             <label for="composite-block-select">Select Core</label>
@@ -1065,6 +1134,38 @@
         </div>
         <div id="status-bar">Upload a site plan to begin.</div>
         <div id="report-container"></div>
+
+        <div class="control-group">
+            <h3 class="collapsible-header collapsed">8. Scripts &amp; Macros <span>+</span></h3>
+            <div class="collapsible-content collapsed">
+                <div style="display:flex; gap:5px; margin-bottom:10px;">
+                    <button id="macro-record-btn" class="warning" style="flex:1;"
+                        onclick="window.handleStartMacro()">&#9679; Start Macro</button>
+                    <button id="macro-stop-btn" class="danger" style="flex:1;"
+                        onclick="window.handleStopMacro()">&#9632;
+                        Stop Macro</button>
+                </div>
+                <div class="button-grid-3">
+                    <button id="gen-state-script-btn" onclick="window.handleGenStateScript()">Gen State</button>
+                    <button id="save-script-btn" class="success" onclick="window.handleSaveScript()">Save File</button>
+                    <label for="load-script-upload" class="button active"
+                        style="margin:0; padding:5px 0; text-align:center; cursor:pointer;">Load File</label>
+                    <input type="file" id="load-script-upload" accept=".json,.txt" style="display:none;"
+                        onchange="window.handleLoadScriptFile(event)">
+                </div>
+                <div style="margin-top: 10px;">
+                    <label style="font-size:0.8em; margin-bottom:5px; display:block; cursor:pointer;">
+                        <input type="checkbox" id="clear-canvas-checkbox" checked> Clear canvas on load
+                    </label>
+                    <button id="play-script-btn" style="width:100%; border-radius:4px;" class="warning"
+                        onclick="window.handlePlayScript()">&#9654; Play Script</button>
+                </div>
+                <textarea id="script-editor"
+                    style="width:100%; height:150px; font-family:monospace; font-size:0.8em; margin-top:10px; padding:5px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;"
+                    placeholder="Script content will appear here..."></textarea>
+            </div>
+        </div>
+
     </div>
 
     <div id="level-op-modal" class="modal-overlay">
@@ -1164,15 +1265,17 @@
         </div>
     </div>
 
-
     <div id="dxf-layer-selector-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Select DXF Layers to Display</h3>
             <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-                <button id="layer-select-all-btn" class="secondary-button" style="width: auto; padding: 5px 10px;">Select All</button>
-                <button id="layer-deselect-all-btn" class="secondary-button" style="width: auto; padding: 5px 10px;">Deselect All</button>
+                <button id="layer-select-all-btn" class="secondary-button"
+                    style="width: auto; padding: 5px 10px;">Select All</button>
+                <button id="layer-deselect-all-btn" class="secondary-button"
+                    style="width: auto; padding: 5px 10px;">Deselect All</button>
             </div>
-            <div id="dxf-layer-selection-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fff; margin-bottom: 20px;">
+            <div id="dxf-layer-selection-list"
+                style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fff; margin-bottom: 20px;">
                 <!-- Populated via JS -->
             </div>
             <div class="button-grid-2">
@@ -1186,7 +1289,8 @@
     <div id="level-selector-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Select Levels to Display</h3>
-            <div id="level-selection-list" style="max-height: 400px; overflow-y: auto; margin:15px 0; border: 1px solid #eee; padding:10px; border-radius:4px;">
+            <div id="level-selection-list"
+                style="max-height: 400px; overflow-y: auto; margin:15px 0; border: 1px solid #eee; padding:10px; border-radius:4px;">
                 <!-- Checkboxes will be populated by JS -->
             </div>
             <div class="button-grid">
@@ -1199,6 +1303,31 @@
             </div>
         </div>
     </div>
+
+    <div id="audit-service-blocks-modal" class="modal-overlay">
+        <div class="modal-content wide">
+            <h3>Audit Service Blocks</h3>
+            <p style="font-size:0.85em; color:#666; margin-top:-8px;">
+                Review every placed service block below. Checked blocks are <b>kept</b>; unchecked blocks will be
+                <b>deleted</b> when you confirm. Blocks with no linked geometry (⚠) are unchecked by default.
+            </p>
+            <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.9em; cursor:pointer;">
+                    <input type="checkbox" id="audit-select-all-checkbox"> Select All
+                </label>
+                <span id="audit-selection-summary" style="font-size:0.85em; color:#555;"></span>
+            </div>
+            <div id="audit-service-blocks-list"
+                style="max-height: 400px; overflow-y: auto; margin:10px 0; border: 1px solid #eee; padding:8px; border-radius:4px;">
+                <!-- Rows populated by JS -->
+            </div>
+            <div class="button-grid" style="margin-top:15px;">
+                <button id="confirm-audit-deletion-btn" class="danger">Delete Unchecked</button>
+                <button id="cancel-audit-modal-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
 
     <script type="importmap">
     {

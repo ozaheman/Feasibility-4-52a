@@ -1,41 +1,12 @@
 import { state, setCurrentMode } from './state.js';
 import { PREDEFINED_BLOCKS, BLOCK_CATEGORY_COLORS } from './config.js';
 import { createCompositeGroup } from './drawingTools.js';
+import { getShortLabel } from './utils.js';
 
 let currentRequirements = null;
 let currentPreviewMode = 'requirements'; // 'requirements' or 'selection'
 let currentSelectedIndex = -1;
 
-/**
- * Maps block keys to short display labels for the preview panel.
- */
-function getShortLabel(key) {
-    const k = key.toLowerCase();
-    if (k.includes('lift')) return 'LIFT';
-    if (k.includes('staircase')) return 'STAIR';
-    if (k.includes('electrical')) return 'ELE';
-    if (k.includes('garbage')) return 'GARB';
-    if (k.includes('water_meter') || k.includes('watermeter')) return 'WATER';
-    if (k.includes('pump_room') || k.includes('pumproom')) return 'PUMP';
-    if (k.includes('telephone') || k.includes('tele_room')) return 'TELE';
-    if (k.includes('substation')) return 'SUB';
-    if (k.includes('control_room')) return 'CTRL';
-    if (k.includes('lv_room')) return 'LV';
-    if (k.includes('ets_room')) return 'ETS';
-    if (k.includes('generator')) return 'GEN';
-    if (k.includes('gsm')) return 'GSM';
-    if (k.includes('rmu')) return 'RMU';
-    if (k.includes('btu')) return 'BTU';
-    if (k.includes('shaft')) return 'SHAFT';
-    if (k.includes('lobby') || k.includes('entrance')) return 'LOBBY';
-    if (k.includes('water_tank')) return 'TANK';
-    if (k.includes('toilet')) return 'WC';
-    if (k.includes('janitor')) return 'JAN';
-    if (k.includes('security')) return 'SEC';
-    
-    // Fallback: first word up to 5 chars
-    return key.split('_')[0].substring(0, 5).toUpperCase();
-}
 
 /**
  * Determines the category of a block based on its key.

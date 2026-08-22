@@ -58,6 +58,73 @@ export function getPolygonAreaFromPoints(points) {
     }
     return Math.abs(area / 2);
 }
+/**
+ * Maps a service block key/name to a short display tag (e.g. "LIFT", "STAIR").
+ * Shared by the composite preview panel, service-block canvas tags, and the
+ * "Placed Service Blocks" list so they all agree on the same short labels.
+ */
+export function getShortLabel(key) {
+    const k = String(key || '').toLowerCase();
+    if (k.includes('lift')) return 'LIFT';
+    if (k.includes('staircase')) return 'STAIR';
+    if (k.includes('electrical')) return 'ELE';
+    if (k.includes('garbage')) return 'GARB';
+    if (k.includes('water_meter') || k.includes('watermeter')) return 'WATER';
+    if (k.includes('pump_room') || k.includes('pumproom')) return 'PUMP';
+    if (k.includes('telephone') || k.includes('tele_room')) return 'TELE';
+    if (k.includes('substation')) return 'SUB';
+    if (k.includes('control_room')) return 'CTRL';
+    if (k.includes('lv_room')) return 'LV';
+    if (k.includes('ets_room')) return 'ETS';
+    if (k.includes('generator')) return 'GEN';
+    if (k.includes('gsm')) return 'GSM';
+    if (k.includes('rmu')) return 'RMU';
+    if (k.includes('btu')) return 'BTU';
+    if (k.includes('shaft')) return 'SHAFT';
+    if (k.includes('lobby') || k.includes('entrance')) return 'LOBBY';
+    if (k.includes('water_tank')) return 'TANK';
+    if (k.includes('toilet')) return 'WC';
+    if (k.includes('janitor')) return 'JAN';
+    if (k.includes('security')) return 'SEC';
+
+    // Fallback: first word up to 5 chars
+    return (k.split('_')[0] || k).substring(0, 5).toUpperCase();
+}
+
+let _measureCanvas = null;
+/**
+ * Computes a font size so `text` fits inside a box of boxWidth × boxHeight,
+ * measured precisely via canvas 2D text metrics (not an approximation).
+ * Used to size the short type tag drawn on each service block so it always
+ * scales down/up with the block itself and never exceeds its bounds.
+ */
+export function getFittedFontSize(text, boxWidth, boxHeight, options = {}) {
+    const {
+        fontFamily = 'Arial',
+        fontWeight = 'bold',
+        maxWidthRatio = 0.8,
+        maxHeightRatio = 0.5,
+        minSize = 1,
+        maxSize = 48
+    } = options;
+
+    const safeText = String(text || '');
+    if (!_measureCanvas) _measureCanvas = document.createElement('canvas');
+    const ctx = _measureCanvas.getContext('2d');
+
+    const refSize = 100;
+    ctx.font = `${fontWeight} ${refSize}px ${fontFamily}`;
+    const widthAtRef = ctx.measureText(safeText).width || (refSize * 0.6 * Math.max(1, safeText.length));
+    const widthPerFontUnit = widthAtRef / refSize;
+
+    const fontSizeForWidth = widthPerFontUnit > 0 ? (boxWidth * maxWidthRatio) / widthPerFontUnit : maxSize;
+    const fontSizeForHeight = boxHeight * maxHeightRatio;
+
+    let fontSize = Math.min(fontSizeForWidth, fontSizeForHeight, maxSize);
+    fontSize = Math.max(minSize, fontSize);
+    return fontSize;
+}
+
 export function getPolygonBoundingBox(points) {
     if (!points || points.length === 0) {
         return { x: 0, y: 0, width: 0, height: 0 };

@@ -4,7 +4,7 @@
 // =====================================================================
 import { getCanvas, getOverlayContext } from './canvasController.js';
 import { resetState, state } from './state.js';
-import { pointToLineSegmentDistance, getLineIntersection, allocateCountsByPercent, f, fInt, getPolygonProperties } from './utils.js';
+import { pointToLineSegmentDistance, getLineIntersection, allocateCountsByPercent, f, fInt, getPolygonProperties, getShortLabel, getFittedFontSize } from './utils.js';
 import { initUI, updateUI, applyLevelVisibility, updateLevelFootprintInfo, updateParkingDisplay, updateMixTotal } from './uiController.js';
 // REMOVED: import { exitAllModes, handleFinishPolygon, handleObjectModified, handleDblClick } from './eventHandlers.js';
 // IMPORT only what is needed, and NOT handleDblClick
@@ -850,7 +850,13 @@ export function placeServiceBlock(pointer, blockKeyOrData, levelOverride = null)
     const colors = BLOCK_CATEGORY_COLORS[blockData.category || 'default'];
     const blockId = `SB-${state.serviceBlockCounter++}`;
     const rect = new fabric.Rect({ width: blockWidth, height: blockHeight, fill: colors.fill, stroke: colors.stroke, strokeWidth: 2, originX: 'center', originY: 'center', strokeUniform: true });
-    const label = new fabric.Text(blockId, { fontSize: Math.min(blockWidth, blockHeight) * 0.2, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center' });
+    const tagText = getShortLabel(blockData.key || blockData.name || blockId);
+    const tagFontSize = getFittedFontSize(tagText, blockWidth, blockHeight);
+    const label = new fabric.Text(tagText, {
+        fontSize: tagFontSize, fill: '#fff', fontFamily: 'Arial', fontWeight: 'bold', textAlign: 'center',
+        backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center', name: 'blockTag',
+        clipPath: new fabric.Rect({ width: blockWidth, height: blockHeight, originX: 'center', originY: 'center' })
+    });
     const lockIcon = new fabric.Text("🔒", { fontSize: Math.min(blockWidth, blockHeight) * 0.2, left: Math.min(blockWidth, blockHeight) * 0.2, originY: 'center', visible: true });
 
     const group = new fabric.Group([rect, label, lockIcon], {
@@ -892,7 +898,15 @@ export function createCompositeGroup(compositeData, pointer) {
         const colors = BLOCK_CATEGORY_COLORS[blockData.category || 'default'];
         const blockId = `SB-${state.serviceBlockCounter++}`;
         const rect = new fabric.Rect({ width: blockWidth, height: blockHeight, fill: colors.fill, stroke: colors.stroke, strokeWidth: 2, originX: 'center', originY: 'center', strokeUniform: true });
-        const label = new fabric.Text(blockId, { fontSize: Math.min(blockWidth, blockHeight) * 0.2, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center' });
+        const label = (() => {
+            const tagText = getShortLabel(blockData.key || blockData.name || blockId);
+            const fs = getFittedFontSize(tagText, blockWidth, blockHeight);
+            return new fabric.Text(tagText, {
+                fontSize: fs, fill: '#fff', fontFamily: 'Arial', fontWeight: 'bold', textAlign: 'center',
+                backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center', name: 'blockTag',
+                clipPath: new fabric.Rect({ width: blockWidth, height: blockHeight, originX: 'center', originY: 'center' })
+            });
+        })();
 
         const x_px = (blockDef.x || 0) / state.scale.ratio;
         const y_px = (blockDef.y || 0) / state.scale.ratio;

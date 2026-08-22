@@ -1,15 +1,18 @@
-
 import { LEVEL_ORDER, LEVEL_DEFINITIONS, PREDEFINED_COMPOSITE_BLOCKS, AREA_STATEMENT_DATA, HOTEL_REQUIREMENTS, PREDEFINED_BLOCKS, BLOCK_CATEGORY_COLORS, DUBAI_LOCATIONS, MARKET_RATE_PROPERTY_TYPES, DUBAI_LAND_RATES } from './config.js';
-import { f, fInt, getPolygonProperties } from './utils.js';
+import { f, fInt, getPolygonProperties, getShortLabel } from './utils.js';
 import { resetState, state } from './state.js';
-import { getCanvas } from './canvasController.js';
+import { getCanvas, zoomToObject } from './canvasController.js';
 import { enterMode, handleCalculate, exitAllModes } from './eventHandlers.js';
 import { captureLevelScreenshot } from './reportGenerator.js';
 import { layoutFlatsOnPolygon } from './apartmentLayout.js';
-import { exportMarketRatesXML, importMarketRatesXML, updateDxfLayerProperty, getSavedSessionNames } from './io.js';
-
-import { recordAction } from './actionRecorder.js';
+import { exportMarketRatesXML, importMarketRatesXML, updateDxfLayerProperty, getSavedSessionNames, autosaveToLocalStorage, downloadFile } from './io.js';
+import { recordAction, macroState, startRecording, stopRecording, playMacroScript } from './actionRecorder.js';
+import { generateStateScript, loadStateScript, detectPlotNumber } from './stateScripting.js';
 import { syncPlacementData } from './dyn_composite_block.js';
+let currentlyEditingUnitKey = null;
+let tempUnitData = null;
+let currentLevelOp = null;
+
 export function renderDxfLayersSidebar() {
     const container = document.getElementById('dxf-layers-container');
     if (!container) return;
@@ -306,8 +309,20 @@ export function updateUI() {
     document.getElementById('draw-bus-bay-btn').disabled = !scaleSet || !(hasPlot || hasAnyFootprint);
     document.getElementById('draw-loading-bay-btn').disabled = !scaleSet || !(hasPlot || hasAnyFootprint);
 
-    document.getElementById('calculateBtn').disabled = !hasPlot || !hasCalculableFootprint;
-    document.getElementById('generateDetailedReportBtn').disabled = !hasPlot || !hasCalculableFootprint;
+    const canCalculate = hasPlot && hasCalculableFootprint && scaleSet;
+    const calculateBtn = document.getElementById('calculateBtn');
+    const generateDetailedReportBtn = document.getElementById('generateDetailedReportBtn');
+    calculateBtn.disabled = !canCalculate;
+    generateDetailedReportBtn.disabled = !canCalculate;
+    const reportReasons = [];
+    if (!scaleSet) reportReasons.push('set the scale');
+    if (!hasPlot) reportReasons.push('draw the plot');
+    if (!hasCalculableFootprint) reportReasons.push('draw a typical floor footprint');
+    const reportTooltip = canCalculate
+        ? 'Generate the summary feasibility report'
+        : `Disabled until you: ${reportReasons.join(', ')}`;
+    calculateBtn.title = reportTooltip;
+    generateDetailedReportBtn.title = reportTooltip;
     document.getElementById('export-pdf-btn').disabled = !state.lastCalculatedData;
     document.getElementById('area-statement-btn').disabled = !hasPlot;
     document.getElementById('previewLayoutBtn').disabled = !hasTypicalFootprint || !state.lastCalculatedData || state.projectType !== 'Residential';
@@ -350,6 +365,10 @@ export function updateUI() {
     if (selectBtn) {
         selectBtn.classList.toggle('active', !state.currentMode);
     }
+
+    // Keep the "Placed Service Blocks" panel (names, types, areas, link status) in sync
+    // whenever the UI refreshes — e.g. right after a session/autosave load, not just after edits.
+    renderServiceBlockList();
 }
 
 export function updateLiveApartmentCalc() {
@@ -478,6 +497,32 @@ export function applyLevelVisibility() {
             obj.set('visible', true);
             return;
         }
+
+        // Feature 2: linked geometry follows its linked service block's level visibility
+        if ((obj.isImportedGeometry || obj.isGeometryGroup) && obj.linkedBlockId) {
+            // Find the service block with this id to determine its level
+            let linkedBlockLevel = null;
+            state.serviceBlocks.forEach(b => {
+                if (b.isServiceBlock && b.blockId === obj.linkedBlockId) linkedBlockLevel = b.level;
+                else if (b.isCompositeGroup) {
+                    b.getObjects().forEach(sub => {
+                        if (sub.isServiceBlock && sub.blockId === obj.linkedBlockId) linkedBlockLevel = (b.level || sub.level);
+                    });
+                }
+            });
+            if (linkedBlockLevel) {
+                // Show geometry when its block's level is visible
+                if (state.levelVisibilityMode === 'custom') {
+                    obj.set('visible', !!state.customLevelVisibility[linkedBlockLevel]);
+                } else {
+                    obj.set('visible', state.allLayersVisible || linkedBlockLevel === state.currentLevel);
+                }
+            } else {
+                obj.set('visible', true); // no known level – always show
+            }
+            return;
+        }
+
         if (obj.level) {
             if (state.levelVisibilityMode === 'custom') {
                 obj.set('visible', !!state.customLevelVisibility[obj.level]);
@@ -491,7 +536,7 @@ export function applyLevelVisibility() {
     if (toggleBtn) {
         toggleBtn.textContent = (state.allLayersVisible && state.levelVisibilityMode !== 'custom') ? "Isolate Current Layer" : "Show All Layers";
     }
-    
+
     canvas.renderAll();
 }
 
@@ -514,7 +559,7 @@ export function openLevelSelector() {
         check.type = 'checkbox';
         check.className = 'level-select-checkbox';
         check.value = levelKey;
-        
+
         if (state.levelVisibilityMode === 'custom') {
             check.checked = !!state.customLevelVisibility[levelKey];
         } else {
@@ -556,32 +601,54 @@ export function setAllLevelCheckboxes(checked) {
 
 export function populateServiceBlocksDropdown() {
     const selectEl = document.getElementById('serviceBlockType');
-    const addSubBlockSelect = document.getElementById('add-sub-block-select');
+    const addSubBlockSelect = document.getElementById('add-sub-block-select')
+    if (!selectEl || !addSubBlockSelect) return;
     selectEl.innerHTML = '';
     addSubBlockSelect.innerHTML = '';
 
     const filteredData = AREA_STATEMENT_DATA.filter(item => !item.projectTypes || item.projectTypes.includes(state.projectType));
 
-    const sortedData = [...filteredData].sort((a, b) => {
+    //const sortedData = [...filteredData].sort((a, b) => {//edited
+    const sortedFilteredData = [...filteredData].sort((a, b) => {
         const levelIndexA = LEVEL_ORDER.indexOf(a.level);
         const levelIndexB = LEVEL_ORDER.indexOf(b.level);
         if (levelIndexA !== levelIndexB) { return levelIndexA - levelIndexB; }
         return a.name.localeCompare(b.name);
     });
 
-    sortedData.forEach(item => {
-        const key = `${item.name.replace(/[\s()./]/g, '_')}_${item.w}_${item.h}`;
+    //sortedData.forEach(item => {
+    //    const key = `${item.name.replace(/[\s()./]/g, '_')}_${item.w}_${item.h}`;
+    sortedFilteredData.forEach(item => {
+        const key = item.key || `${item.name.replace(/[\s()./]/g, '_')}_${item.w}_${item.h}`;
         const option = document.createElement('option');
         option.value = key;
         const levelText = item.level.replace(/_/g, ' ');
         option.textContent = `[${levelText}] ${item.name} (${item.w}x${item.h})`;
         selectEl.appendChild(option);
-        addSubBlockSelect.appendChild(option.cloneNode(true));
+        // addSubBlockSelect.appendChild(option.cloneNode(true));
+    });
+
+    // Populate addSubBlockSelect with ALL items from AREA_STATEMENT_DATA so any block can be added to composite cores
+    const allSortedData = [...AREA_STATEMENT_DATA].sort((a, b) => {
+        const levelIndexA = LEVEL_ORDER.indexOf(a.level);
+        const levelIndexB = LEVEL_ORDER.indexOf(b.level);
+        if (levelIndexA !== levelIndexB) { return levelIndexA - levelIndexB; }
+        return a.name.localeCompare(b.name);
+    });
+
+    allSortedData.forEach(item => {
+        const key = item.key || `${item.name.replace(/[\s()./]/g, '_')}_${item.w}_${item.h}`;
+        const option = document.createElement('option');
+        option.value = key;
+        const levelText = item.level.replace(/_/g, ' ');
+        option.textContent = `[${levelText}] ${item.name} (${item.w}x${item.h})`;
+        addSubBlockSelect.appendChild(option);
     });
 }
 
 export function populateCompositeBlocks() {
     const select = document.getElementById('composite-block-select');
+    if (!select) return;
     const selectedValue = select.value;
     select.innerHTML = '';
     state.userCompositeBlocks.forEach((block, index) => {
@@ -590,17 +657,63 @@ export function populateCompositeBlocks() {
         option.textContent = block.name;
         select.appendChild(option);
     });
-    if (selectedValue) select.value = selectedValue;
+    //if (selectedValue) select.value = selectedValue;
+    if (selectedValue && select.querySelector(`option[value="${selectedValue}"]`)) {
+        select.value = selectedValue;
+    }
     select.dispatchEvent(new Event('change'));
     updateUI();
 }
 
-export function renderServiceBlockList() {
-    const listEl = document.getElementById('service-block-list');
-    if (state.serviceBlocks.length === 0 || state.scale.ratio === 0) {
-        listEl.innerHTML = '<p style="color:#888; text-align:center;">No blocks placed.</p>';
-        return;
+// ---- Helper: compute real canvas-geometry area in m² using shoelace formula ----
+function getCanvasGeometryAreaM2(obj) {
+    if (!obj || state.scale.ratio === 0) return null;
+
+    // Collect world-space polygon points
+    let worldPoints = null;
+
+    if ((obj.type === 'polyline' || obj.type === 'polygon') && obj.points && obj.points.length >= 3) {
+        // Get transformation matrix to convert local points to world coords
+        const matrix = obj.calcTransformMatrix();
+        worldPoints = obj.points.map(p => {
+            const local = new fabric.Point(p.x - obj.pathOffset.x, p.y - obj.pathOffset.y);
+            return fabric.util.transformPoint(local, matrix);
+        });
+    } else if (obj.isGeometryGroup && obj.getObjects) {
+        // For a geometry group: sum child areas recursively
+        return obj.getObjects().reduce((sum, child) => {
+            const childArea = getCanvasGeometryAreaM2(child);
+            return sum + (childArea || 0);
+        }, 0);
+    } else {
+        // Fallback: use bounding rect area (works for any shape)
+        const br = obj.getBoundingRect(true);
+        const pxArea = br.width * br.height;
+        return pxArea * (state.scale.ratio * state.scale.ratio);
     }
+
+    if (!worldPoints || worldPoints.length < 3) return null;
+
+    // Shoelace formula for polygon area in pixels²
+    let area = 0;
+    const n = worldPoints.length;
+    for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        area += worldPoints[i].x * worldPoints[j].y;
+        area -= worldPoints[j].x * worldPoints[i].y;
+    }
+    const pxArea = Math.abs(area) / 2;
+    // Convert px² → m²
+    return pxArea * (state.scale.ratio * state.scale.ratio);
+}
+
+/**
+ * Builds a flat, audit-ready row per placed service block:
+ * { blockId, name, category, level, areaM2, areaSource ('geo'|'block'), linked (bool), linkedGeoCount }
+ * Shared by renderServiceBlockList() and the Audit modal so both always agree.
+ */
+export function getServiceBlockAuditRows() {
+    if (state.scale.ratio === 0) return [];
 
     const flatBlocks = [];
     state.serviceBlocks.forEach(b => {
@@ -612,12 +725,62 @@ export function renderServiceBlockList() {
             flatBlocks.push({ block: b, parent: null });
         }
     });
-    const blocksByLevelAndCat = flatBlocks.reduce((acc, fb) => {
-        const level = (fb.parent ? fb.parent.level : fb.block.level) || 'Unassigned';
-        const category = (fb.block.blockData?.category || 'default').toUpperCase();
-        if (!acc[level]) acc[level] = {};
-        if (!acc[level][category]) acc[level][category] = [];
-        acc[level][category].push(fb);
+
+    return flatBlocks.map(fb => {
+        const { block, parent } = fb;
+        const level = (parent ? parent.level : block.level) || 'Unassigned';
+        const category = (block.blockData?.category || 'default').toUpperCase();
+
+        let areaM2 = null;
+        let areaSource = 'block';
+        const linkedGeos = state.canvas.getObjects().filter(
+            o => (o.isImportedGeometry || o.isGeometryGroup) && o.linkedBlockId === block.blockId
+        );
+        if (linkedGeos.length > 0) {
+            const geoArea = linkedGeos.reduce((sum, geo) => {
+                const a = getCanvasGeometryAreaM2(geo);
+                return sum + (a != null ? a : 0);
+            }, 0);
+            if (geoArea > 0) {
+                areaM2 = geoArea;
+                areaSource = 'geo';
+            }
+        }
+        if (areaM2 == null || areaM2 === 0) {
+            const scaleX = parent ? block.scaleX * parent.scaleX : block.scaleX;
+            const scaleY = parent ? block.scaleY * parent.scaleY : block.scaleY;
+            areaM2 = (block.width * scaleX * block.height * scaleY) * (state.scale.ratio * state.scale.ratio);
+            areaSource = 'block';
+        }
+
+        return {
+            blockId: block.blockId,
+            name: block.blockData?.name || block.blockId,
+            shortLabel: getShortLabel(block.blockData?.key || block.blockData?.name || block.blockId),
+            category,
+            level,
+            areaM2,
+            areaSource,
+            linked: linkedGeos.length > 0,
+            linkedGeoCount: linkedGeos.length
+        };
+    });
+}
+
+export function renderServiceBlockList() {
+    const listEl = document.getElementById('service-block-list');
+    if (!listEl) return;
+    if (state.serviceBlocks.length === 0 || state.scale.ratio === 0) {
+        listEl.innerHTML = '<p style="color:#888; text-align:center;">No blocks placed.</p>';
+        return;
+    }
+
+    const rows = getServiceBlockAuditRows();
+
+    const blocksByLevelAndCat = rows.reduce((acc, row) => {
+        if (!acc[row.level]) acc[row.level] = {};
+        if (!acc[row.level][row.category]) acc[row.level][row.category] = [];
+        acc[row.level][row.category].push(row);
         return acc;
     }, {});
 
@@ -628,21 +791,297 @@ export function renderServiceBlockList() {
         Object.keys(blocksByLevelAndCat[level]).sort().forEach(category => {
             let categoryTotalArea = 0;
             html += `<ul style="list-style-type: none; padding-left: 10px; margin: 2px 0;">`;
-            blocksByLevelAndCat[level][category].forEach(fb => {
-                const { block, parent } = fb;
-                const scaleX = parent ? block.scaleX * parent.scaleX : block.scaleX;
-                const scaleY = parent ? block.scaleY * parent.scaleY : block.scaleY;
-                const areaM2 = (block.width * scaleX * block.height * scaleY) * (state.scale.ratio * state.scale.ratio);
+            blocksByLevelAndCat[level][category].forEach(row => {
+                const { blockId, name, shortLabel, areaM2, areaSource, linked } = row;
+
                 categoryTotalArea += areaM2;
-                html += `<li title="${block.blockId}: ${block.blockData.name}">${block.blockId}: ${block.blockData.name} ${f(areaM2)} m²</li>`;
+
+                const geoIndicator = linked
+                    ? ` <span title="${areaSource === 'geo' ? 'Area from linked geometry' : 'Has linked geometry'}" style="color:#1976d2; font-size:0.85em;">\u25CF</span>`
+                    : ` <span title="No geometry linked – select this block on canvas, then shift-click a geometry and use Link to Block" style="color:#e65100; font-size:0.85em; cursor:help;">\u26a0</span>`;
+                const readableTypeLabel = shortLabel.charAt(0) + shortLabel.slice(1).toLowerCase();
+                const sourceBadge = areaSource === 'geo'
+                    ? ` <span style="font-size:0.75em; color:#388e3c; background:#e8f5e9; padding:1px 4px; border-radius:2px;">geo</span>`
+                    : ` <span title="Area from the block's own dimensions" style="font-size:0.75em; color:#555; background:#eee; padding:1px 4px; border-radius:2px;">${readableTypeLabel}</span>`;
+                const typeBadgeColor = (BLOCK_CATEGORY_COLORS[category] || {}).fill || '#ccc';
+                const typeBadge = `<span class="sb-type-badge" title="Type: ${category}"
+                        style="flex-shrink:0; font-size:0.7em; font-weight:bold; color:#333; background:${typeBadgeColor}; border:1px solid rgba(0,0,0,0.15); padding:1px 5px; border-radius:3px; text-transform:uppercase; margin-right:4px;">
+                        ${category}
+                    </span>`;
+
+                // Is this block the currently active canvas object?
+                html += `<li class="sb-list-item" data-blockid="${blockId}"
+                    style="display:flex; align-items:center; justify-content:space-between; padding:3px 0; border-bottom:1px dotted #eee; gap:4px;">
+                    <span class="sb-name" data-blockid="${blockId}"
+                        style="flex:1; cursor:pointer; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; display:flex; align-items:center;"
+                        title="Click to select + zoom to this SERVICE BLOCK on canvas">
+                        ${typeBadge}${geoIndicator} ${blockId}: ${name}
+                    </span>
+                    <span class="sb-area" data-blockid="${blockId}"
+                        style="flex-shrink:0; cursor:pointer; padding:1px 5px; border-radius:3px; background:${areaSource === 'geo' ? '#e8f5e9' : '#f5f5f5'}; display:flex; align-items:center; gap:4px;"
+                        title="${linked ? 'Click to select + zoom to the linked GEOMETRY (GFA area) on canvas' : 'No linked geometry — click to select the service block'}">
+                        <span style="font-size:0.7em; font-weight:bold; color:#555;">${blockId}</span>
+                        <span style="font-weight:bold;">${sourceBadge} ${f(areaM2)} m&#178;</span>
+                    </span>
+                    <button class="sb-link-btn" data-blockid="${blockId}"
+                        style="flex-shrink:0; padding:1px 5px; font-size:0.75em; background:${linked ? '#1976d2' : '#00695c'}; color:white; border:none; border-radius:3px; cursor:pointer;"
+                        title="${linked ? 'Select linked geometry on canvas' : 'Select this block on canvas, then shift-click geometry and click Link to Block'}">
+                        ${linked ? '📐 Geo' : '🔗 Link'}
+                    </button>
+                    <button class="sb-del-btn" data-blockid="${blockId}"
+                        style="flex-shrink:0; padding:1px 5px; font-size:0.75em; background:#c62828; color:white; border:none; border-radius:3px; cursor:pointer;"
+                        title="Delete this service block">
+                        🗑
+                    </button>
+                </li>`;
             });
             html += `</ul>`;
-            html += `<div style="text-align:right; font-weight:bold; font-size:0.9em; border-top: 1px dotted #ccc; padding: 2px 4px;">Total ${category}: ${f(categoryTotalArea)} m²</div>`;
+            html += `<div style="text-align:right; font-weight:bold; font-size:0.9em; border-top: 1px dotted #ccc; padding: 2px 4px;">Total ${category}: ${f(categoryTotalArea)} m&#178;</div>`;
             grandTotalArea += categoryTotalArea;
         });
     });
-    html += `<div style="font-weight:bold; background-color:var(--primary-color); color:white; padding: 4px; margin-top: 10px; text-align:right;">Grand Total: ${f(grandTotalArea)} m²</div>`;
-    listEl.innerHTML = html;
+    html += `<div style="font-weight:bold; background-color:var(--primary-color); color:white; padding: 4px; margin-top: 10px; text-align:right;">Grand Total: ${f(grandTotalArea)} m&#178;</div>`;
+    const legend = `<div style="font-size:0.75em; color:#666; padding:3px 4px; border-bottom:1px solid #ddd; margin-bottom:2px;">
+        Click <b>name</b> to select the block · click <b>area</b> to select its linked geometry
+    </div>`;
+    listEl.innerHTML = legend + html;
+
+
+    // Helper: find a block canvas object by blockId
+    function findBlockObject(blockId) {
+        for (const b of state.serviceBlocks) {
+            if (b.isCompositeGroup) {
+                const sub = b.getObjects().find(s => s.isServiceBlock && s.blockId === blockId);
+                if (sub) return sub;
+            } else if (b.isServiceBlock && b.blockId === blockId) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    // Helper: find the top-level canvas object for a block (may be the composite parent)
+    function findTopLevelObject(blockId) {
+        for (const b of state.serviceBlocks) {
+            if (b.isCompositeGroup) {
+                const sub = b.getObjects().find(s => s.isServiceBlock && s.blockId === blockId);
+                if (sub) return b; // select the composite group
+            } else if (b.isServiceBlock && b.blockId === blockId) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    // ── Name click → select + zoom to the SERVICE BLOCK on canvas ──
+    listEl.querySelectorAll('.sb-name').forEach(span => {
+        span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const blockId = span.dataset.blockid;
+            const topObj = findTopLevelObject(blockId);
+            if (!topObj) return;
+            topObj.set('visible', true);
+            state.canvas.setActiveObject(topObj);
+            zoomToObject(topObj);
+            state.canvas.requestRenderAll();
+            document.getElementById('status-bar').textContent =
+                `Selected service block "${blockId}" on canvas.`;
+        });
+    });
+
+    // ── Area click → select + zoom to the linked GEOMETRY (GFA area). Falls back to the block if unlinked ──
+    listEl.querySelectorAll('.sb-area').forEach(span => {
+        span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const blockId = span.dataset.blockid;
+            const linkedGeos = state.canvas.getObjects().filter(
+                o => (o.isImportedGeometry || o.isGeometryGroup) && o.linkedBlockId === blockId
+            );
+            if (linkedGeos.length > 0) {
+                linkedGeos.forEach(o => o.set('visible', true));
+                const sel = linkedGeos.length === 1
+                    ? linkedGeos[0]
+                    : new fabric.ActiveSelection(linkedGeos, { canvas: state.canvas });
+                state.canvas.setActiveObject(sel);
+                zoomToObject(linkedGeos.length === 1 ? linkedGeos[0] : sel);
+                state.canvas.requestRenderAll();
+                document.getElementById('status-bar').textContent =
+                    `Selected GFA geometry linked to "${blockId}".`;
+            } else {
+                const topObj = findTopLevelObject(blockId);
+                if (topObj) {
+                    topObj.set('visible', true);
+                    state.canvas.setActiveObject(topObj);
+                    zoomToObject(topObj);
+                    state.canvas.requestRenderAll();
+                }
+                document.getElementById('status-bar').textContent =
+                    `"${blockId}" has no linked geometry — area shown is the block's own dimensions. Selected the block instead.`;
+            }
+        });
+    });
+
+    // ── Link button ──
+    // If linked geometry exists → selects the linked geometry
+    // If no linked geometry → selects the service block and shows tip to shift-click geometry
+    listEl.querySelectorAll('.sb-link-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const blockId = btn.dataset.blockid;
+            const linkedGeos = state.canvas.getObjects().filter(
+                o => (o.isImportedGeometry || o.isGeometryGroup) && o.linkedBlockId === blockId
+            );
+            if (linkedGeos.length > 0) {
+                // Show linked geometry
+                linkedGeos.forEach(o => o.set('visible', true));
+                const sel = linkedGeos.length === 1
+                    ? linkedGeos[0]
+                    : new fabric.ActiveSelection(linkedGeos, { canvas: state.canvas });
+                state.canvas.setActiveObject(sel);
+                state.canvas.requestRenderAll();
+                document.getElementById('status-bar').textContent =
+                    `Selected ${linkedGeos.length} geometry object(s) linked to "${blockId}".`;
+            } else {
+                // Select the service block and prompt
+                const topObj = findTopLevelObject(blockId);
+                if (topObj) {
+                    topObj.set('visible', true);
+                    state.canvas.setActiveObject(topObj);
+                    state.canvas.requestRenderAll();
+                }
+                document.getElementById('status-bar').textContent =
+                    `"${blockId}" selected. Now SHIFT-CLICK an imported geometry on canvas, then click 🔗 Link to Block in Geometry Actions.`;
+            }
+        });
+    });
+
+    // ── Delete button → remove service block from canvas + state ──
+    listEl.querySelectorAll('.sb-del-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const blockId = btn.dataset.blockid;
+            if (!confirm(`Delete service block "${blockId}"? This cannot be undone.`)) return;
+            deleteServiceBlocksByIds([blockId]);
+            document.getElementById('status-bar').textContent = `Deleted service block "${blockId}".`;
+        });
+    });
+}
+
+/**
+ * Removes the given service blocks (by blockId) from canvas + state,
+ * purges any linkedBlockId references on geometry, then refreshes the list.
+ * Shared by the single 🗑 delete button and the Audit modal's bulk delete.
+ */
+export function deleteServiceBlocksByIds(blockIds) {
+    if (!blockIds || blockIds.length === 0) return;
+    const idSet = new Set(blockIds);
+
+    // Purge linkedBlockId on any linked geometry
+    state.canvas.getObjects().forEach(obj => {
+        if (obj.linkedBlockId && idSet.has(obj.linkedBlockId)) delete obj.linkedBlockId;
+    });
+
+    // Remove from state and canvas
+    const toRemove = [];
+    state.serviceBlocks = state.serviceBlocks.filter(b => {
+        if (b.isServiceBlock && idSet.has(b.blockId)) { toRemove.push(b); return false; }
+        if (b.isCompositeGroup) {
+            const subs = b.getObjects().filter(s => s.isServiceBlock);
+            const remainingSubs = subs.filter(s => !idSet.has(s.blockId));
+            if (remainingSubs.length === 0 && subs.length > 0) { toRemove.push(b); return false; }
+            // Partial removal: remove only the matching sub-blocks from within the composite
+            subs.forEach(s => { if (idSet.has(s.blockId)) b.remove(s); });
+        }
+        return true;
+    });
+    toRemove.forEach(obj => state.canvas.remove(obj));
+    state.canvas.discardActiveObject();
+    state.canvas.renderAll();
+    renderServiceBlockList();
+}
+
+// ============================================================
+// Audit Service Blocks modal — interactive review before deletion
+// ============================================================
+
+export function openAuditServiceBlocksModal() {
+    const modal = document.getElementById('audit-service-blocks-modal');
+    const listEl = document.getElementById('audit-service-blocks-list');
+    const summaryEl = document.getElementById('audit-selection-summary');
+    const selectAllCb = document.getElementById('audit-select-all-checkbox');
+    if (!modal || !listEl) return;
+
+    const rows = getServiceBlockAuditRows();
+
+    if (rows.length === 0) {
+        listEl.innerHTML = '<p style="color:#888; text-align:center;">No service blocks placed.</p>';
+        summaryEl.textContent = '';
+        selectAllCb.checked = false;
+        selectAllCb.disabled = true;
+    } else {
+        selectAllCb.disabled = false;
+        listEl.innerHTML = rows.map(row => {
+            const typeBadgeColor = (BLOCK_CATEGORY_COLORS[row.category] || {}).fill || '#ccc';
+            const linkIcon = row.linked
+                ? `<span title="Linked to geometry" style="color:#1976d2;">\u25CF Linked</span>`
+                : `<span title="Not linked to any geometry" style="color:#e65100;">\u26a0 Unlinked</span>`;
+            return `<label class="audit-row" data-blockid="${row.blockId}"
+                    style="display:flex; align-items:center; gap:8px; padding:5px 4px; border-bottom:1px dotted #eee; cursor:pointer; font-size:0.85em;">
+                <input type="checkbox" class="audit-row-checkbox" data-blockid="${row.blockId}" ${row.linked ? 'checked' : ''}>
+                <span style="flex-shrink:0; font-size:0.7em; font-weight:bold; color:#333; background:${typeBadgeColor}; border:1px solid rgba(0,0,0,0.15); padding:1px 5px; border-radius:3px; text-transform:uppercase;">${row.category}</span>
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.blockId}: ${row.name} <span style="color:#888;">(${row.level.replace(/_/g, ' ')})</span></span>
+                <span style="flex-shrink:0; font-weight:bold;">${f(row.areaM2)} m&#178;</span>
+                <span style="flex-shrink:0; width:110px; text-align:right;">${linkIcon}</span>
+            </label>`;
+        }).join('');
+    }
+
+    const updateSummary = () => {
+        const total = rows.length;
+        const checked = listEl.querySelectorAll('.audit-row-checkbox:checked').length;
+        summaryEl.textContent = total > 0
+            ? `${checked} of ${total} kept · ${total - checked} will be deleted on confirm`
+            : '';
+        selectAllCb.checked = total > 0 && checked === total;
+    };
+
+    listEl.querySelectorAll('.audit-row-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSummary);
+    });
+    selectAllCb.onchange = () => {
+        listEl.querySelectorAll('.audit-row-checkbox').forEach(cb => { cb.checked = selectAllCb.checked; });
+        updateSummary();
+    };
+
+    updateSummary();
+    modal.style.display = 'flex';
+}
+
+export function closeAuditServiceBlocksModal() {
+    const modal = document.getElementById('audit-service-blocks-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+export function confirmAuditServiceBlocksDeletion() {
+    const listEl = document.getElementById('audit-service-blocks-list');
+    if (!listEl) return;
+
+    const uncheckedIds = Array.from(listEl.querySelectorAll('.audit-row-checkbox'))
+        .filter(cb => !cb.checked)
+        .map(cb => cb.dataset.blockid);
+
+    if (uncheckedIds.length === 0) {
+        document.getElementById('status-bar').textContent = '✓ Audit: nothing was unchecked, so nothing was deleted.';
+        closeAuditServiceBlocksModal();
+        return;
+    }
+
+    if (!confirm(`Delete ${uncheckedIds.length} unchecked service block(s)? This cannot be undone.`)) return;
+
+    deleteServiceBlocksByIds(uncheckedIds);
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent = `Audit: ${uncheckedIds.length} unchecked service block(s) deleted.`;
+    closeAuditServiceBlocksModal();
 }
 
 export function updateSelectedObjectControls(obj) {
@@ -653,7 +1092,36 @@ export function updateSelectedObjectControls(obj) {
         console.error("UI element #selected-object-name not found!");
     }
 
-    if (!obj || window.isEditingGroup) {
+    // --- Group edit mode: show only the Finish Editing button, hide all other controls ---
+    if (window.isEditingGroup) {
+        if (wrapper) wrapper.style.display = 'block';
+        if (nameEl) nameEl.textContent = '✏️ Editing Composite Group...';
+        // Hide all sub-panels except confirm button
+        const panelsToHide = [
+            'dimension-controls-wrapper', 'substation-controls-wrapper',
+            'rotation-control-wrapper', 'category-controls-wrapper',
+            'playarea-controls-wrapper', 'geometry-controls-wrapper'
+        ];
+        panelsToHide.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        const confirmBtn = document.getElementById('confirm-group-edit-btn');
+        if (confirmBtn) confirmBtn.style.display = 'block';
+        const editBtn = document.getElementById('edit-group-btn');
+        if (editBtn) editBtn.style.display = 'none';
+        const toggleLockBtn = document.getElementById('toggle-lock-btn');
+        if (toggleLockBtn) toggleLockBtn.style.display = 'none';
+        const deleteBtn = document.getElementById('delete-block-btn');
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        const flipGrid = document.querySelector('.button-grid-4');
+        if (flipGrid) flipGrid.style.display = 'none';
+        const levelGrid = document.querySelectorAll('.button-grid');
+        levelGrid.forEach(el => { if (el.querySelector('#move-level-btn')) el.style.display = 'none'; });
+        return;
+    }
+
+    if (!obj) {
         if (wrapper) wrapper.style.display = 'none';
         if (nameEl) nameEl.textContent = '';
         return;
@@ -731,6 +1199,59 @@ export function updateSelectedObjectControls(obj) {
         document.getElementById('is-covered-playarea').checked = !!obj.isCovered;
     } else {
         playAreaWrapper.style.display = 'none';
+    }
+
+    // Feature 2 & 3: geometry controls
+    const geoControlsWrapper = document.getElementById('geometry-controls-wrapper');
+    if (geoControlsWrapper) {
+        const isImportedGeo = !!(obj.isImportedGeometry || obj.isGeometryGroup);
+        const isMultiGeo = obj.type === 'activeSelection' &&
+            obj.getObjects && obj.getObjects().some(o => o.isImportedGeometry || o.isGeometryGroup);
+        const hasServiceBlock = !!(obj.isServiceBlock) || (obj.type === 'activeSelection' &&
+            obj.getObjects && obj.getObjects().some(o => o.isServiceBlock));
+        const showGroup = isMultiGeo && obj.getObjects && obj.getObjects().filter(o => o.isImportedGeometry || o.isGeometryGroup).length >= 2;
+        const showExplode = !!(obj.isGeometryGroup);
+
+        // Show the wrapper for service blocks (so user knows to shift-click geometry + block)
+        // AND for imported geometry selections AND for multi-selected service blocks
+        const showWrapper = isImportedGeo || isMultiGeo || isServiceBlock || hasServiceBlock || (obj.isCompositeGroup);
+        geoControlsWrapper.style.display = showWrapper ? 'block' : 'none';
+
+        // Update helper tip
+        const geoTip = document.getElementById('geo-controls-tip');
+        if (geoTip) {
+            if (isServiceBlock && !isImportedGeo && !isMultiGeo) {
+                geoTip.style.display = 'block';
+                geoTip.textContent = '↳ Shift-click an imported geometry on canvas, then click Link to Block';
+            } else {
+                geoTip.style.display = 'none';
+            }
+        }
+
+        const groupBtn = document.getElementById('group-geometry-btn');
+        const explodeBtn = document.getElementById('explode-geometry-btn');
+        const linkBtn = document.getElementById('link-geometry-btn');
+        // Show Group when 2+ geo objects selected
+        if (groupBtn) groupBtn.style.display = showGroup ? 'inline-block' : 'none';
+        // Show Explode when a geometry group is selected
+        if (explodeBtn) explodeBtn.style.display = showExplode ? 'inline-block' : 'none';
+        // Show Link when: geo selected, OR multi-selection with geo, OR service block selected alone
+        if (linkBtn) linkBtn.style.display = (isImportedGeo || isMultiGeo || isServiceBlock || obj.isCompositeGroup) ? 'inline-block' : 'none';
+
+        // Group/Ungroup for service blocks: group when 2+ plain (non-composite) service
+        // blocks are multi-selected; ungroup when a composite block group is selected.
+        const groupBlocksBtn = document.getElementById('group-blocks-btn');
+        const ungroupBlocksBtn = document.getElementById('ungroup-blocks-btn');
+        const selectedPlainServiceBlocks = obj.type === 'activeSelection' && obj.getObjects
+            ? obj.getObjects().filter(o => o.isServiceBlock)
+            : [];
+        const selectionHasComposite = obj.type === 'activeSelection' && obj.getObjects
+            ? obj.getObjects().some(o => o.isCompositeGroup)
+            : false;
+        const showGroupBlocks = selectedPlainServiceBlocks.length >= 2 && !selectionHasComposite;
+        const showUngroupBlocks = !!(obj.isCompositeGroup);
+        if (groupBlocksBtn) groupBlocksBtn.style.display = showGroupBlocks ? 'inline-block' : 'none';
+        if (ungroupBlocksBtn) ungroupBlocksBtn.style.display = showUngroupBlocks ? 'inline-block' : 'none';
     }
 }
 
@@ -839,7 +1360,7 @@ export function updateParkingDisplay(liveUnitCounts = null) {
             if (formula) formula += ' + ';
             formula += `(Last Basement 1 x ${lastLevelSum})`;
         }
-        
+
         if (formula) {
             totalProvEl.innerHTML = `${fInt(providedParking)} <br><small style="font-weight:normal; color:#666;">${formula}</small>`;
         } else {
@@ -1016,6 +1537,7 @@ export function renderUnitCards() {
 }
 
 export function openEditUnitModal(key) {
+    currentlyEditingUnitKey = key;
     const unit = state.currentProgram.unitTypes.find(t => t.key === key);
     if (!unit) return;
 
@@ -1106,14 +1628,14 @@ export function placeSelectedComposite() {
 let currentlyEditingCompositeIndex = -1;
 let tempCompositeData = null;
 
-export function editSelectedComposite() {
+/* export function editSelectedCompositexx() {
     const index = document.getElementById('composite-block-select').value;
     if (index !== null && state.userCompositeBlocks[index]) {
         openCompositeEditor(index);
     }
-}
+} */
 
-export function deleteSelectedComposite() {
+/* export function deleteSelectedComposite() {
     const index = document.getElementById('composite-block-select').value;
     if (index !== null && state.userCompositeBlocks[index]) {
         if (confirm(`Delete "${state.userCompositeBlocks[index].name}"?`)) {
@@ -1121,8 +1643,25 @@ export function deleteSelectedComposite() {
             populateCompositeBlocks();
         }
     }
+} */
+export function editSelectedComposite() {
+    const select = document.getElementById('composite-block-select');
+    const index = select ? select.value : null;
+    if (index !== null && index !== "" && state.userCompositeBlocks[index]) {
+        openCompositeEditor(parseInt(index, 10));
+    }
 }
 
+export function deleteSelectedComposite() {
+    const select = document.getElementById('composite-block-select');
+    const index = select ? select.value : null;
+    if (index !== null && index !== "" && state.userCompositeBlocks[index]) {
+        if (confirm(`Delete "${state.userCompositeBlocks[index].name}"?`)) {
+            state.userCompositeBlocks.splice(index, 1);
+            populateCompositeBlocks();
+        }
+    }
+}
 export function openNewCompositeEditor() {
     currentlyEditingCompositeIndex = -1;
     tempCompositeData = { name: `New Core ${state.userCompositeBlocks.length + 1}`, level: "Typical_Floor", blocks: [] };
@@ -1137,6 +1676,13 @@ export function openCompositeEditor(index) {
     currentlyEditingCompositeIndex = index;
     tempCompositeData = JSON.parse(JSON.stringify(state.userCompositeBlocks[index]));
     if (!tempCompositeData.level) tempCompositeData.level = 'Typical_Floor';
+    tempCompositeData.blocks.forEach(b => {
+        const ref = PREDEFINED_BLOCKS[b.key];
+        if (ref) {
+            if (b.w === undefined) b.w = ref.width;
+            if (b.h === undefined) b.h = ref.height;
+        }
+    });
     document.getElementById('edit-composite-title').textContent = `Edit: ${tempCompositeData.name}`;
     document.getElementById('composite-block-name-input').value = tempCompositeData.name;
     document.getElementById('composite-default-level').value = tempCompositeData.level;
@@ -1145,50 +1691,88 @@ export function openCompositeEditor(index) {
 }
 
 export function saveCompositeChanges() {
-    const newName = document.getElementById('composite-block-name-input').value.trim();
+    // const newName = document.getElementById('composite-block-name-input').value.trim();
+    const nameInput = document.getElementById('composite-block-name-input');
+    const newName = nameInput ? nameInput.value.trim() : '';
     if (!newName) {
         document.getElementById('status-bar').textContent = 'Composite core name cannot be empty.';
         return;
     }
     tempCompositeData.name = newName;
-    tempCompositeData.level = document.getElementById('composite-default-level').value;
+    //tempCompositeData.level = document.getElementById('composite-default-level').value;
+    const levelSelect = document.getElementById('composite-default-level');
+    tempCompositeData.level = levelSelect ? levelSelect.value : 'Typical_Floor';
+
+    tempCompositeData.blocks.forEach(b => {
+        const ref = PREDEFINED_BLOCKS[b.key];
+        if (ref) {
+            if (b.w === undefined || isNaN(b.w)) b.w = ref.width;
+            if (b.h === undefined || isNaN(b.h)) b.h = ref.height;
+        }
+        b.x = isNaN(b.x) ? 0 : parseFloat(b.x);
+        b.y = isNaN(b.y) ? 0 : parseFloat(b.y);
+        b.w = isNaN(b.w) || b.w <= 0 ? 1 : parseFloat(b.w);
+        b.h = isNaN(b.h) || b.h <= 0 ? 1 : parseFloat(b.h);
+    });
     if (currentlyEditingCompositeIndex === -1) {
         state.userCompositeBlocks.push(tempCompositeData);
     } else {
         state.userCompositeBlocks[currentlyEditingCompositeIndex] = tempCompositeData;
     }
     populateCompositeBlocks();
-    document.getElementById('edit-composite-modal').style.display = 'none';
+    //document.getElementById('edit-composite-modal').style.display = 'none';
+    const modal = document.getElementById('edit-composite-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 export function renderCompositeEditorList() {
     const listEl = document.getElementById('composite-sub-blocks-list');
+    if (!listEl || !tempCompositeData) return;
     let tableHTML = `<table><thead><tr><th>Block</th><th>W</th><th>H</th><th>X</th><th>Y</th><th></th></tr></thead><tbody>`;
     tempCompositeData.blocks.forEach((blockDef, index) => {
         const blockData = PREDEFINED_BLOCKS[blockDef.key];
         if (!blockData) { console.warn(`Composite block references non-existent block key: "${blockDef.key}". Skipping.`); return; }
+        const widthVal = blockDef.w ?? blockData.width;
+        const heightVal = blockDef.h ?? blockData.height;
+        const xVal = blockDef.x ?? 0;
+        const yVal = blockDef.y ?? 0;
         tableHTML += `<tr>
             <td>${blockData.name}</td>
-            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="w" value="${blockDef.w ?? blockData.width}"></td>
-            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="h" value="${blockDef.h ?? blockData.height}"></td>
-            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="x" value="${blockDef.x || 0}"></td>
-            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="y" value="${blockDef.y || 0}"></td>
+            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="w" value="${widthVal}"></td>
+            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="h" value="${heightVal}"></td>
+            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="x" value="${xVal}"></td>
+            <td><input type="number" class="composite-field" step="0.1" data-index="${index}" data-axis="y" value="${yVal}"></td>
             <td><button class="danger remove-sub-block-btn" data-index="${index}">X</button></td>
         </tr>`;
     });
     tableHTML += `</tbody></table>`;
     listEl.innerHTML = tableHTML;
     listEl.querySelectorAll('.composite-field').forEach(i => i.addEventListener('change', (e) => {
-        tempCompositeData.blocks[e.target.dataset.index][e.target.dataset.axis] = parseFloat(e.target.value);
+        //tempCompositeData.blocks[e.target.dataset.index][e.target.dataset.axis] = parseFloat(e.target.value);
+        const idx = parseInt(e.target.dataset.index, 10);
+        const axis = e.target.dataset.axis;
+        const val = parseFloat(e.target.value);
+        if (!isNaN(idx) && tempCompositeData.blocks[idx]) {
+            tempCompositeData.blocks[idx][axis] = isNaN(val) ? 0 : val;
+        }
     }));
     listEl.querySelectorAll('.remove-sub-block-btn').forEach(b => b.addEventListener('click', (e) => {
-        tempCompositeData.blocks.splice(e.target.dataset.index, 1);
-        renderCompositeEditorList();
+        /*  tempCompositeData.blocks.splice(e.target.dataset.index, 1);
+         renderCompositeEditorList(); */
+        const idx = parseInt(e.target.dataset.index, 10);
+        if (!isNaN(idx) && tempCompositeData.blocks[idx]) {
+            tempCompositeData.blocks.splice(idx, 1);
+            renderCompositeEditorList();
+        }
     }));
 }
 
 export function addSubBlockToCompositeEditor() {
-    const key = document.getElementById('add-sub-block-select').value;
+    //const key = document.getElementById('add-sub-block-select').value;
+    const selectEl = document.getElementById('add-sub-block-select');
+    if (!selectEl) return;
+    const key = selectEl.value;
+    if (!key) return;
     const blockData = PREDEFINED_BLOCKS[key];
     if (blockData) {
         tempCompositeData.blocks.push({ key, x: 0, y: 0, w: blockData.width, h: blockData.height });
@@ -1236,9 +1820,122 @@ export function handleConfirmLevelOp() {
         const targetLevels = Array.from(document.querySelectorAll('#level-checklist input:checked')).map(cb => cb.value);
         const objectsToClone = object.type === 'activeSelection' ? object.getObjects() : [object];
         const propertiesToInclude = [
-            'level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint', 
-            'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams', 
-            'parkingCount', 'isGuide', 'isImportedGeometry', 'layerName', 'hasBalcony', 
+            'level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint',
+            'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams',
+            'parkingCount', 'isGuide', 'isImportedGeometry', 'layerName', 'hasBalcony',
+            'isLinearFootprint', 'originalPoints', 'isPlotEdge', 'edgeIndex'
+        ];
+
+        targetLevels.forEach(level => {
+            objectsToClone.forEach(obj => {
+                const matrix = obj.calcTransformMatrix();
+                const transform = fabric.util.qrDecompose(matrix);
+
+                obj.clone(cloned => {
+                    cloned.set({
+                        left: transform.translateX,
+                        top: transform.translateY,
+                        angle: transform.angle,
+                        scaleX: transform.scaleX,
+                        scaleY: transform.scaleY,
+                        skewX: transform.skewX,
+                        skewY: transform.skewY,
+                        level: level
+                    });
+                    cloned.setCoords();
+
+                    if (cloned.isServiceBlock || cloned.isCompositeGroup) {
+                        state.serviceBlocks.push(cloned);
+                    } else if (cloned.isParkingRow) {
+                        state.parkingRows.push(cloned);
+                    } else if (cloned.isGuide) {
+                        state.guideLines.push(cloned);
+                    } else if (cloned.isFootprint) {
+                        if (!state.levels[level]) state.levels[level] = { objects: [], isLocked: false };
+                        state.levels[level].objects.push(cloned);
+                    }
+
+                    state.canvas.add(cloned);
+                }, propertiesToInclude);
+            });
+        });
+        setTimeout(() => {
+            state.canvas.renderAll();
+            renderServiceBlockList();
+            updateParkingDisplay();
+            autosaveToLocalStorage();
+        }, 500);
+    }
+    document.getElementById('level-op-modal').style.display = 'none';
+}
+
+export function displayHotelRequirements() {
+    const starRating = document.getElementById('hotel-star-rating').value;
+    const modal = document.getElementById('hotel-req-modal');
+    const titleEl = document.getElementById('hotel-req-title');
+    const bodyEl = document.getElementById('hotel-req-body');
+    titleEl.textContent = `Requirements for ${starRating.replace('-', ' ')} Hotel`;
+    const reqData = HOTEL_REQUIREMENTS[starRating];
+    if (reqData.Message) {
+        bodyEl.innerHTML = `<p>${reqData.Message}</p>`;
+    } else {
+        let html = '';
+        for (const category in reqData) {
+            html += `<h4>${category}</h4>`;
+            html += '<table class="req-table"><tbody>';
+            reqData[category].forEach(item => {
+                html += `<tr><td style="width: 30px;"><span class="req-type req-type-${item.type}">${item.type}</span></td><td>${item.text}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        }
+        bodyEl.innerHTML = html;
+    }
+    modal.style.display = 'flex';
+}
+
+export function openLevelOpModalxx(mode) {
+    const object = state.canvas.getActiveObject();
+    if (!object) {
+        document.getElementById('status-bar').textContent = 'Please select an object first.';
+        return;
+    }
+    currentLevelOp = { mode, object };
+    const modal = document.getElementById('level-op-modal');
+    const checklist = document.getElementById('level-checklist');
+    const dropdown = document.getElementById('level-select-dropdown');
+    if (mode === 'copy') {
+        document.getElementById('level-op-title').textContent = 'Copy Object to Levels';
+        document.getElementById('copy-level-content').style.display = 'block';
+        document.getElementById('move-level-content').style.display = 'none';
+        checklist.innerHTML = LEVEL_ORDER.map(levelKey => {
+            const isCurrent = levelKey === object.level;
+            return `<label><input type="checkbox" value="${levelKey}" ${isCurrent ? 'disabled' : ''}> ${levelKey.replace(/_/g, ' ')} ${isCurrent ? '(current)' : ''}</label>`;
+        }).join('');
+    } else {
+        document.getElementById('level-op-title').textContent = 'Move Object to Level';
+        document.getElementById('copy-level-content').style.display = 'none';
+        document.getElementById('move-level-content').style.display = 'block';
+        dropdown.innerHTML = LEVEL_ORDER.filter(lk => lk !== object.level).map(lk => `<option value="${lk}">${lk.replace(/_/g, ' ')}</option>`).join('');
+    }
+    modal.style.display = 'flex';
+}
+
+export function handleConfirmLevelOpxx() {
+    const { mode, object } = currentLevelOp;
+    if (mode === 'move') {
+        const newLevel = document.getElementById('level-select-dropdown').value;
+        if (newLevel) {
+            object.set('level', newLevel);
+            renderServiceBlockList();
+            applyLevelVisibility();
+        }
+    } else if (mode === 'copy') {
+        const targetLevels = Array.from(document.querySelectorAll('#level-checklist input:checked')).map(cb => cb.value);
+        const objectsToClone = object.type === 'activeSelection' ? object.getObjects() : [object];
+        const propertiesToInclude = [
+            'level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint',
+            'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams',
+            'parkingCount', 'isGuide', 'isImportedGeometry', 'layerName', 'hasBalcony',
             'isLinearFootprint', 'originalPoints', 'isPlotEdge', 'edgeIndex'
         ];
 
@@ -1276,17 +1973,17 @@ export function handleConfirmLevelOp() {
                 }, propertiesToInclude);
             });
         });
-        setTimeout(() => { 
-            state.canvas.renderAll(); 
-            renderServiceBlockList(); 
-            updateParkingDisplay(); 
+        setTimeout(() => {
+            state.canvas.renderAll();
+            renderServiceBlockList();
+            updateParkingDisplay();
             autosaveToLocalStorage();
         }, 500);
     }
     document.getElementById('level-op-modal').style.display = 'none';
 }
 
-export function displayHotelRequirements() {
+export function displayHotelRequirementsxx() {
     const starRating = document.getElementById('hotel-star-rating').value;
     const modal = document.getElementById('hotel-req-modal');
     const titleEl = document.getElementById('hotel-req-title');
@@ -2333,3 +3030,95 @@ export async function updateSessionList() {
         select.appendChild(opt);
     });
 }
+
+
+// =====================================================================
+// NEW: Scripts & Macros Window Handlers
+// These are called by onclick attributes in the HTML panel.
+// =====================================================================
+
+window.handleStartMacro = function () {
+    startRecording();
+    document.getElementById('macro-record-btn').style.backgroundColor = '#e53935';
+    document.getElementById('macro-record-btn').textContent = '● Recording';
+};
+
+window.handleStopMacro = function () {
+    const json = stopRecording();
+    const editor = document.getElementById('script-editor');
+    if (editor) editor.value = json;
+    document.getElementById('macro-record-btn').style.backgroundColor = '';
+    document.getElementById('macro-record-btn').textContent = 'Start Macro';
+};
+
+window.handleGenStateScript = function () {
+    const json = generateStateScript();
+    const editor = document.getElementById('script-editor');
+    if (editor) editor.value = json;
+    document.getElementById('status-bar').textContent = 'State script generated in editor. Save to file to persist.';
+};
+
+window.handleSaveScript = function () {
+    const editor = document.getElementById('script-editor');
+    if (!editor || !editor.value.trim()) {
+        alert('No script content to save. Generate or record a script first.');
+        return;
+    }
+    // Detect if it's a state script or macro
+    let plotNo = 'script';
+    try {
+        const parsed = JSON.parse(editor.value);
+        if (Array.isArray(parsed)) {
+            plotNo = 'macro';
+        } else if (parsed.plotNumber) {
+            plotNo = parsed.plotNumber;
+        } else {
+            plotNo = detectPlotNumber() || 'state';
+        }
+    } catch (e) { plotNo = 'script'; }
+    const ts = new Date().toISOString().split('T')[0];
+    const filename = `feasibility_${plotNo}_${ts}.json`;
+    downloadFile(filename, editor.value, 'application/json');
+};
+
+window.handleLoadScriptFile = function (event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target.result;
+        const editor = document.getElementById('script-editor');
+        if (editor) editor.value = content;
+        document.getElementById('status-bar').textContent = `Script file "${file.name}" loaded in editor. Press Play Script to execute.`;
+    };
+    reader.readAsText(file);
+    // Reset the file input so same file can be reloaded
+    event.target.value = '';
+};
+
+window.handlePlayScript = function () {
+    const editor = document.getElementById('script-editor');
+    if (!editor || !editor.value.trim()) {
+        alert('No script in editor. Load or generate a script first.');
+        return;
+    }
+    const content = editor.value.trim();
+    try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+            // Macro script
+            playMacroScript(content);
+        } else if (parsed.canvasObjects) {
+            // State script
+            const clearCheckbox = document.getElementById('clear-canvas-checkbox');
+            const clearCanvas = clearCheckbox ? clearCheckbox.checked : true;
+            if (!clearCanvas || confirm('Loading a State Script will CLEAR the current canvas. Continue?')) {
+                loadStateScript(content, clearCanvas);
+            }
+        } else {
+            alert('Unrecognized script format.');
+        }
+    } catch (e) {
+        alert(`Could not parse script: ${e.message}`);
+    }
+};

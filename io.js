@@ -419,7 +419,7 @@ export async function exportProjectZIP(canvas) {
     const objectsToExport = canvas.getObjects().filter(obj => !obj.isSnapPoint && !obj.isEdgeHighlight && !obj.isSnapIndicator);
     objectsToExport.forEach(obj => {
         const objNode = doc.createElement("Object");
-        const customProps = ['level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint', 'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams', 'parkingCount', 'isGuide', 'isDxfOverlay'];
+        const customProps = ['level', 'isServiceBlock', 'blockData', 'blockId', 'isPlot', 'isFootprint', 'isCompositeGroup', 'compositeDefName', 'isParkingRow', 'parkingParams', 'parkingCount', 'isGuide', 'isDxfOverlay', 'linkedBlockId', 'isImportedGeometry', 'isGeometryGroup', 'geometryGroupName', 'layerName'];
         const fabricData = obj.toObject(customProps);
         objNode.textContent = JSON.stringify(fabricData);
         canvasNode.appendChild(objNode);
@@ -619,6 +619,10 @@ export async function importProjectZIP(file, canvas, onComplete) {
         }
 
         canvas.renderAll();
+        // Auto-refresh block tags so loaded blocks show blockId + name
+        if (typeof window.refreshServiceBlockLabels === 'function') {
+            window.refreshServiceBlockLabels();
+        }
         if (onComplete) onComplete();
 
     } catch (error) {
@@ -1402,7 +1406,8 @@ export async function saveCurrentSession() {
                     'level', 'isServiceBlock', 'blockData', 'blockId', 
                     'isPlot', 'isFootprint', 'isCompositeGroup', 
                     'compositeDefName', 'isParkingRow', 'parkingParams', 
-                    'parkingCount', 'isGuide'
+                    'parkingCount', 'isGuide',
+                    'linkedBlockId', 'isImportedGeometry', 'isGeometryGroup', 'geometryGroupName', 'layerName'
                 ]))
         };
         sessionData.projectData = projectData;
@@ -1461,7 +1466,8 @@ export async function rollingAutosave() {
                     'level', 'isServiceBlock', 'blockData', 'blockId', 
                     'isPlot', 'isFootprint', 'isCompositeGroup', 
                     'compositeDefName', 'isParkingRow', 'parkingParams', 
-                    'parkingCount', 'isGuide'
+                    'parkingCount', 'isGuide',
+                    'linkedBlockId', 'isImportedGeometry', 'isGeometryGroup', 'geometryGroupName', 'layerName'
                 ]))
         };
         sessionData.projectData = projectData;
@@ -1545,6 +1551,12 @@ export async function loadSession(sessionName) {
                     if (obj.isPlot) state.plotPolygon = obj;
                     if (obj.isParkingRow) state.parkingRows.push(obj);
                     if (obj.isServiceBlock || obj.isCompositeGroup) state.serviceBlocks.push(obj);
+                    if (obj.isGuide) state.guideLines.push(obj);
+                    if (obj.isFootprint) {
+                        const lvl = obj.level || 'Typical_Floor';
+                        if (!state.levels[lvl]) state.levels[lvl] = { objects: [], isLocked: false };
+                        state.levels[lvl].objects.push(obj);
+                    }
                 });
                 canvas.renderAll();
                 updateUI();
@@ -1560,6 +1572,119 @@ export async function loadSession(sessionName) {
 export async function getSavedSessionNames() {
     return await listKeysFromStore(STORE_SESSIONS);
 }
+
+// ============================================
+// NEW: Export / Import Session as JSON File
+// ============================================
+
+export async function exportSessionAsJSON() {
+    try {
+        const canvas = state.canvas;
+        if (!canvas) return;
+
+        const now = new Date();
+        const timestamp = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(/ /g, '') +
+                          '_' + now.getHours().toString().padStart(2, '0') + now.getMinutes().toString().padStart(2, '0');
+
+        const projectData = {
+            _version: 1,
+            _exportedAt: now.toISOString(),
+            scale: state.scale,
+            projectType: state.projectType,
+            plotEdgeProperties: state.plotEdgeProperties,
+            actionHistory: state.actionHistory,
+            manualAreaOverrides: state.manualAreaOverrides,
+            userCompositeBlocks: state.userCompositeBlocks,
+            currentLevel: state.currentLevel,
+            dxfLayerMetadata: Object.keys(state.dxfLayers).reduce((acc, name) => {
+                const layer = state.dxfLayers[name];
+                acc[name] = { color: layer.color, thickness: layer.thickness, visible: layer.visible };
+                return acc;
+            }, {}),
+            canvasObjects: canvas.getObjects()
+                .filter(obj => !obj.isSnapPoint && !obj.isEdgeHighlight && !obj.isSnapIndicator && !obj.isDxfOverlay)
+                .map(obj => obj.toObject([
+                    'level', 'isServiceBlock', 'blockData', 'blockId',
+                    'isPlot', 'isFootprint', 'isCompositeGroup',
+                    'compositeDefName', 'isParkingRow', 'parkingParams',
+                    'parkingCount', 'isGuide', 'isImportedGeometry', 'layerName',
+                    'linkedBlockId', 'isImportedGeometry', 'isGeometryGroup', 'geometryGroupName', 'layerName'
+                ]))
+        };
+
+        const jsonString = JSON.stringify(projectData, null, 2);
+        downloadFile(`session_${timestamp}.json`, jsonString, 'application/json');
+        document.getElementById('status-bar').textContent = `✓ Session exported as session_${timestamp}.json`;
+    } catch (err) {
+        console.error('Export session JSON failed:', err);
+        document.getElementById('status-bar').textContent = 'Error: Could not export session as JSON.';
+    }
+}
+
+export async function importSessionFromJSON(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const data = JSON.parse(event.target.result);
+            if (!data || !data.canvasObjects) {
+                throw new Error('Invalid session file: missing canvas objects.');
+            }
+
+            const canvas = state.canvas;
+            resetState(true);
+            canvas.clear();
+
+            if (data.scale && data.scale.pixels > 0) setScale(data.scale.pixels, data.scale.meters);
+            state.projectType = data.projectType || 'Residential';
+            state.plotEdgeProperties = data.plotEdgeProperties || [];
+            state.actionHistory = data.actionHistory || [];
+            state.manualAreaOverrides = data.manualAreaOverrides || {};
+            state.userCompositeBlocks = data.userCompositeBlocks || [];
+            state.currentLevel = data.currentLevel || 'Typical_Floor';
+
+            const projectSelect = document.getElementById('project-type-select');
+            if (projectSelect) projectSelect.value = state.projectType;
+
+            const masterProgram = PROJECT_PROGRAMS[state.projectType];
+            if (masterProgram) state.currentProgram = rehydrateProgram(JSON.parse(JSON.stringify(masterProgram)), masterProgram);
+
+            fabric.util.enlivenObjects(data.canvasObjects, (objects) => {
+                objects.forEach(obj => {
+                    canvas.add(obj);
+                    if (obj.isPlot) state.plotPolygon = obj;
+                    if (obj.isParkingRow) state.parkingRows.push(obj);
+                    if (obj.isServiceBlock || obj.isCompositeGroup) state.serviceBlocks.push(obj);
+                    if (obj.isGuide) state.guideLines.push(obj);
+                    if (obj.isFootprint) {
+                        const lvl = obj.level || 'Typical_Floor';
+                        if (!state.levels[lvl]) state.levels[lvl] = { objects: [], isLocked: false };
+                        state.levels[lvl].objects.push(obj);
+                    }
+                });
+
+                // Restore DXF layer metadata visual properties (no geometry data in JSON)
+                if (data.dxfLayerMetadata) {
+                    state.dxfLayers = {};
+                    Object.keys(data.dxfLayerMetadata).forEach(name => {
+                        state.dxfLayers[name] = { ...data.dxfLayerMetadata[name], name, objects: [] };
+                    });
+                }
+
+                canvas.renderAll();
+                updateUI();
+                document.getElementById('status-bar').textContent = `✓ Session imported from JSON (${objects.length} objects restored).`;
+            });
+        } catch (err) {
+            console.error('Import session JSON failed:', err);
+            document.getElementById('status-bar').textContent = `Error importing JSON: ${err.message}`;
+        }
+    };
+    reader.readAsText(file);
+}
+
+window.exportSessionAsJSON = exportSessionAsJSON;
+window.importSessionFromJSON = importSessionFromJSON;
 
 async function clearIndexedDB() {
     const db = await initIndexedDB();
@@ -1616,7 +1741,8 @@ export async function autosaveToLocalStorage() {
                         'level', 'isServiceBlock', 'blockData', 'blockId', 
                         'isPlot', 'isFootprint', 'isCompositeGroup', 
                         'compositeDefName', 'isParkingRow', 'parkingParams', 
-                        'parkingCount', 'isGuide'
+                        'parkingCount', 'isGuide',
+                        'linkedBlockId', 'isImportedGeometry', 'isGeometryGroup', 'geometryGroupName', 'layerName'
                     ];
                     return obj.toObject(customProps);
                 })
@@ -1699,6 +1825,12 @@ export async function loadFromAutosave(canvas) {
                     if (obj.isPlot) state.plotPolygon = obj;
                     if (obj.isParkingRow) state.parkingRows.push(obj);
                     if (obj.isServiceBlock || obj.isCompositeGroup) state.serviceBlocks.push(obj);
+                    if (obj.isGuide) state.guideLines.push(obj);
+                    if (obj.isFootprint) {
+                        const lvl = obj.level || 'Typical_Floor';
+                        if (!state.levels[lvl]) state.levels[lvl] = { objects: [], isLocked: false };
+                        state.levels[lvl].objects.push(obj);
+                    }
                 });
                 canvas.renderAll();
                 updateUI();
@@ -1715,4 +1847,3 @@ export async function loadFromAutosave(canvas) {
         return false;
     }
 }
-

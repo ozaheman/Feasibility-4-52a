@@ -7,12 +7,12 @@ import { resetState, setCurrentLevel, state, setCurrentMode, setScale, toggleAll
 import { initDrawingTools, handleDblClick, getSetbackPolygonPoints, handleCanvasMouseMove, clearSetbackGuides, clearEdgeHighlight, updateAlignmentHighlight, resetDrawingState, handleCanvasMouseDown, clearEdgeSnapIndicator, finishScaling, drawSetbackGuides, findSnapPoint, updateSnapIndicators, drawMeasurement, getClickedPlotEdge, findNearestParkingEdge, getNearestEdge, snapObjectToEdge, alignObjectToEdge, updateEdgeHighlight, getClickedPolygonEdge, makeFootprintEditable, makeFootprintUneditable, makeParkingEditable, makeParkingUneditable, refreshEditablePolygon, addDrawingPoint, handleAlignmentPointSelect, activateAlignScaleTool, activateScaleGeometryTool, activateMoveOriginTool, placeServiceBlock, createCompositeGroup } from './drawingTools.js';
 import { regenerateParkingInGroup, generateLinearParking } from './parkingLayoutUtils.js';
 import { init3D, generate3DBuilding, generateOpenScadScript } from './viewer3d.js';
-import { initUI, updateUI, displayHotelRequirements, renderDxfLayersSidebar, placeSelectedComposite, handleConfirmLevelOp, applyLevelVisibility, updateLevelFootprintInfo, renderServiceBlockList, updateSelectedObjectControls, updateBlockLockUI, openLevelOpModal, updateParkingDisplay, toggleFloatingPanel, updateDashboard, toggleBlockLock, saveUnitChanges, openNewCompositeEditor, editSelectedComposite, deleteSelectedComposite, saveCompositeChanges, addSubBlockToCompositeEditor, applyScenario, toggleApartmentMode, openEditUnitModal, updateLevelCounts, populateServiceBlocksDropdown, updateProgramUI, updateMixTotal, updateScreenshotGallery, openAreaStatementModal, updateAreaStatementPanel, updateFARDisplay, updateSessionList, openDxfLayerSelector, closeDxfLayerSelector, applyDxfLayerVisibilityFromModal, setAllDxfLayerCheckboxes, openLevelSelector, closeLevelSelector, applyLevelSelectionFromModal, setAllLevelCheckboxes } from './uiController.js';
+import { initUI, updateUI, displayHotelRequirements, renderDxfLayersSidebar, placeSelectedComposite, handleConfirmLevelOp, applyLevelVisibility, updateLevelFootprintInfo, renderServiceBlockList, updateSelectedObjectControls, updateBlockLockUI, openLevelOpModal, updateParkingDisplay, toggleFloatingPanel, updateDashboard, toggleBlockLock, saveUnitChanges, openNewCompositeEditor, editSelectedComposite, deleteSelectedComposite, saveCompositeChanges, addSubBlockToCompositeEditor, applyScenario, toggleApartmentMode, openEditUnitModal, updateLevelCounts, populateServiceBlocksDropdown, updateProgramUI, updateMixTotal, updateScreenshotGallery, openAreaStatementModal, updateAreaStatementPanel, updateFARDisplay, updateSessionList, openDxfLayerSelector, closeDxfLayerSelector, applyDxfLayerVisibilityFromModal, setAllDxfLayerCheckboxes, openLevelSelector, closeLevelSelector, applyLevelSelectionFromModal, setAllLevelCheckboxes, openAuditServiceBlocksModal, closeAuditServiceBlocksModal, confirmAuditServiceBlocksDeletion } from './uiController.js';
 import { exportReportAsPDF, generateReport } from './reportGenerator.js';
 import { PROJECT_PROGRAMS, AREA_STATEMENT_DATA, PREDEFINED_BLOCKS, BLOCK_CATEGORY_COLORS, LEVEL_ORDER, SETBACK_RULES } from './config.js';
-import { allocateCountsByPercent, getPolygonProperties, getOffsetPolygon, isPointInRotatedRect, getPolygonFromPolyline } from './utils.js';
+import { allocateCountsByPercent, getPolygonProperties, getOffsetPolygon, isPointInRotatedRect, getPolygonFromPolyline, getShortLabel, getFittedFontSize } from './utils.js';
 import { layoutFlatsOnPolygon } from './apartmentLayout.js';
-import { handleDxfUpload, assignDxfAsPlot, finalizeDxf, deleteDxf, updateDxfStrokeWidth, exportProjectZIP, importProjectZIP, exportServiceBlocksCSV, importServiceBlocksCSV, saveCurrentSession, loadSession, deleteSession, getSavedSessionNames, isolateDxfLayer, showAllDxfLayers } from './io.js';
+import { handleDxfUpload, assignDxfAsPlot, finalizeDxf, deleteDxf, updateDxfStrokeWidth, exportProjectZIP, importProjectZIP, exportServiceBlocksCSV, importServiceBlocksCSV, saveCurrentSession, loadSession, deleteSession, getSavedSessionNames, isolateDxfLayer, showAllDxfLayers, exportSessionAsJSON, importSessionFromJSON } from './io.js';
 import { recordAction } from './actionRecorder.js'; // NEW: for action recorder
 import { updateSubstationSize } from './feasibilityEngine.js';
 import { autosaveToLocalStorage } from './io.js';
@@ -203,7 +203,12 @@ export function setupEventListeners() {
     });
 
     state.canvas.on('selection:cleared', (e) => {
-        updateSelectedObjectControls(null);
+        // While in group edit mode, keep the Finish Editing button visible
+        if (window.isEditingGroup) {
+            updateSelectedObjectControls({});
+        } else {
+            updateSelectedObjectControls(null);
+        }
         updateLevelFootprintInfo();
         updateUI();
     });
@@ -390,6 +395,9 @@ export function setupEventListeners() {
     safeAddEventListener('cancel-level-selection-btn', 'click', closeLevelSelector);
     safeAddEventListener('level-select-all-btn', 'click', () => setAllLevelCheckboxes(true));
     safeAddEventListener('level-deselect-all-btn', 'click', () => setAllLevelCheckboxes(false));
+
+    safeAddEventListener('cancel-audit-modal-btn', 'click', closeAuditServiceBlocksModal);
+    safeAddEventListener('confirm-audit-deletion-btn', 'click', confirmAuditServiceBlocksDeletion);
     safeAddEventListener('draw-plot-btn', 'click', () => enterMode('drawingPlot'));
     safeAddEventListener('draw-guide-btn', 'click', () => enterMode('drawingGuide'));
     safeAddEventListener('draw-building-btn', 'click', () => enterMode('drawingBuilding'));
@@ -426,10 +434,28 @@ export function setupEventListeners() {
 
     safeAddEventListener('calculateBtn', 'click', () => handleCalculate(false, false));
     safeAddEventListener('generateDetailedReportBtn', 'click', () => handleCalculate(false, true));
-    safeAddEventListener('add-block-btn', 'click', () => enterMode('placingBlock'));
+    safeAddEventListener('add-block-btn', 'click', () => {
+        const selectEl = document.getElementById('serviceBlockType');
+        const selectedCount = selectEl ? selectEl.selectedOptions.length : 0;
+        if (selectedCount === 0) {
+            document.getElementById('status-bar').textContent =
+                '⚠ Select at least one block type from the list above before clicking "Add Block(s) to Plan".';
+            return;
+        }
+        enterMode('placingBlock');
+    });
 
     const serviceBlockType = document.getElementById('serviceBlockType');
-    if (serviceBlockType) serviceBlockType.addEventListener('change', handleBlockTypeChange);
+    if (serviceBlockType) {
+        serviceBlockType.addEventListener('change', handleBlockTypeChange);
+        // Reflect selection state on the Add button so it's obvious when nothing is selected yet
+        serviceBlockType.addEventListener('change', () => {
+            const addBtn = document.getElementById('add-block-btn');
+            if (!addBtn || state.scale.ratio === 0) return;
+            const count = serviceBlockType.selectedOptions.length;
+            addBtn.textContent = count > 0 ? `Add Block(s) to Plan (${count} selected)` : 'Add Block(s) to Plan';
+        });
+    }
 
     safeAddEventListener('delete-block-btn', 'click', deleteSelectedObject);
     safeAddEventListener('flip-h-btn', 'click', () => flipSelectedObject('X'));
@@ -690,6 +716,7 @@ export function handleBlockTypeChange(e) {
 }
 export function placeServiceBlockFromUI(pointer) {
     const selectEl = document.getElementById('serviceBlockType');
+    const placedSummary = [];
     Array.from(selectEl.selectedOptions).forEach(option => {
         const blockData = PREDEFINED_BLOCKS[option.value];
         if (!blockData || !state.scale.ratio) return;
@@ -699,8 +726,26 @@ export function placeServiceBlockFromUI(pointer) {
         const blockId = `SB-${state.serviceBlockCounter++}`;
         const rect = new fabric.Rect({ width: blockWidth, height: blockHeight, fill: colors.fill, stroke: colors.stroke, strokeWidth: 2, originX: 'center', originY: 'center', strokeUniform: true });
         rect.setCoords();
-        const label = new fabric.Text(blockId, { fontSize: Math.min(blockWidth, blockHeight) * 0.2, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.4)', originX: 'center', originY: 'center' });
-        const lockIcon = new fabric.Text("🔒", { fontSize: Math.min(blockWidth, blockHeight) * 0.2, left: Math.min(blockWidth, blockHeight) * 0.2, originY: 'center', visible: true });
+
+        // Tag label: short type tag only (e.g. "STAIR", "LIFT"), sized + clipped to fit inside the block
+        const tagText = getShortLabel(blockData.key || blockData.name || blockId);
+        const tagFontSize = getFittedFontSize(tagText, blockWidth, blockHeight);
+        const tagClipRect = new fabric.Rect({ width: blockWidth, height: blockHeight, originX: 'center', originY: 'center' });
+        const label = new fabric.Text(tagText, {
+            fontSize: tagFontSize,
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+            name: 'blockTag',
+            clipPath: tagClipRect,
+        });
+        const lockIcon = new fabric.Text("🔒", { fontSize: tagFontSize, left: Math.min(blockWidth, blockHeight) * 0.2, originY: 'center', visible: true });
         const group = new fabric.Group([rect, label, lockIcon], {
             left: pointer.x,
             top: pointer.y,
@@ -720,10 +765,96 @@ export function placeServiceBlockFromUI(pointer) {
         state.canvas.setActiveObject(group);
 
         group.setCoords();
+        placedSummary.push(`${blockId} (${blockData.name})`);
     });
     setCurrentMode(null);
     renderServiceBlockList();
+
+    const addBtn = document.getElementById('add-block-btn');
+    if (addBtn) addBtn.textContent = 'Add Block(s) to Plan';
+
+    const statusBar = document.getElementById('status-bar');
+    if (statusBar) {
+        statusBar.textContent = placedSummary.length > 0
+            ? `✓ Placed ${placedSummary.length} service block(s): ${placedSummary.join(', ')}. See "Placed Service Blocks" below.`
+            : 'No block type was selected — nothing was placed.';
+    }
 }
+
+/**
+ * Updates the tag label on an existing service block group to show a short,
+ * compact type tag (e.g. "STAIR", "LIFT") — sized and clipped so it always
+ * stays inside the block's own bounding box, however small the block is.
+ * Safe to call on blocks created before this feature existed.
+ */
+function updateServiceBlockLabel(group) {
+    if (!group || !group.isServiceBlock || !group.blockData) return;
+    const objects = group.getObjects ? group.getObjects() : [];
+    const existing = objects.find(o => o.name === 'blockTag' || (o.type === 'text' && o.text && o.text.includes(group.blockId)));
+
+    const boxWidth = group.width || 40;
+    const boxHeight = group.height || 40;
+    const sx = group.scaleX || 1;
+    const sy = group.scaleY || 1;
+    // Fit against the block's CURRENT actual size (post-resize), not its original creation size
+    const currentPxWidth = boxWidth * sx;
+    const currentPxHeight = boxHeight * sy;
+
+    const tagText = getShortLabel(group.blockData.key || group.blockData.name || group.blockId || '');
+    const fontSize = getFittedFontSize(tagText, currentPxWidth, currentPxHeight);
+
+    // Clip to the block's current size, in its own local (pre-scale) coordinate space
+    const clipRect = new fabric.Rect({
+        width: currentPxWidth,
+        height: currentPxHeight,
+        originX: 'center',
+        originY: 'center'
+    });
+
+    if (existing) {
+        existing.set({ text: tagText, fontSize, name: 'blockTag', clipPath: clipRect, textAlign: 'center', scaleX: 1 / sx, scaleY: 1 / sy });
+    } else {
+        // Block was created without the tag — add one
+        const newLabel = new fabric.Text(tagText, {
+            fontSize,
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+            name: 'blockTag',
+            clipPath: clipRect,
+            scaleX: 1 / sx,
+            scaleY: 1 / sy,
+        });
+        group.add(newLabel);
+    }
+}
+
+/**
+ * Refreshes block tag labels on ALL placed service blocks.
+ * Use after loading a session to ensure older blocks display blockId + name.
+ */
+window.refreshServiceBlockLabels = function () {
+    let count = 0;
+    state.serviceBlocks.forEach(b => {
+        if (b.isCompositeGroup && b.getObjects) {
+            b.getObjects().forEach(sub => {
+                if (sub.isServiceBlock) { updateServiceBlockLabel(sub); count++; }
+            });
+        } else if (b.isServiceBlock) {
+            updateServiceBlockLabel(b);
+            count++;
+        }
+    });
+    state.canvas.renderAll();
+    const statusBar = document.getElementById('status-bar');
+    if (statusBar) statusBar.textContent = `✓ Refreshed labels on ${count} service block(s).`;
+};
 
 export function deleteSelectedFootprint() {
     const selected = state.canvas.getActiveObject();
@@ -750,9 +881,32 @@ export function deleteSelectedObject() {
     }
     if (selected.isDxfOverlay) { deleteDxf(); return; }
     if (selected.isFootprint) { deleteSelectedFootprint(); return; }
-    if (selected.isServiceBlock) state.serviceBlocks = state.serviceBlocks.filter(b => b !== selected);
-    else if (selected.isCompositeGroup) state.serviceBlocks = state.serviceBlocks.filter(b => !selected.getObjects().includes(b));
-    else if (selected.isParkingRow) state.parkingRows = state.parkingRows.filter(r => r !== selected);
+
+    // --- Collect block IDs being deleted so we can purge linked geometry ---
+    const deletedBlockIds = new Set();
+    if (selected.isServiceBlock && selected.blockId) {
+        deletedBlockIds.add(selected.blockId);
+        state.serviceBlocks = state.serviceBlocks.filter(b => b !== selected);
+    } else if (selected.isCompositeGroup) {
+        selected.getObjects().forEach(sub => {
+            if (sub.isServiceBlock && sub.blockId) deletedBlockIds.add(sub.blockId);
+        });
+        state.serviceBlocks = state.serviceBlocks.filter(b => !selected.getObjects().includes(b));
+    } else if (selected.isParkingRow) {
+        state.parkingRows = state.parkingRows.filter(r => r !== selected);
+    }
+
+    // --- Purge linkedBlockId from any geometry objects that referenced a deleted block ---
+    if (deletedBlockIds.size > 0) {
+        state.canvas.getObjects().forEach(obj => {
+            if (obj.linkedBlockId && deletedBlockIds.has(obj.linkedBlockId)) {
+                delete obj.linkedBlockId;
+            }
+        });
+        document.getElementById('status-bar').textContent =
+            `Block deleted. Geometry links for ${[...deletedBlockIds].join(', ')} cleared.`;
+    }
+
     state.canvas.remove(selected);
     state.canvas.discardActiveObject().renderAll();
     renderServiceBlockList();
@@ -801,18 +955,33 @@ export function unskewServiceBlockText(group) {
     const sx = group.scaleX || 1;
     const sy = group.scaleY || 1;
 
+    // The block's actual current on-screen size (post-resize), in pixels
     const currentPxWidth = rect.width * sx;
     const currentPxHeight = rect.height * sy;
 
-    const desiredMin = Math.min(currentPxWidth, currentPxHeight);
-    const originalMin = Math.min(rect.width, rect.height);
-    const uniformScale = desiredMin / (originalMin || 1);
+    const tagText = group.blockData ? getShortLabel(group.blockData.key || group.blockData.name || group.blockId || '') : '';
+    const fontSize = getFittedFontSize(tagText, currentPxWidth, currentPxHeight);
+    const clipRect = new fabric.Rect({ width: currentPxWidth, height: currentPxHeight, originX: 'center', originY: 'center' });
 
     group.getObjects('text').forEach(t => {
-        t.set({
-            scaleX: uniformScale / sx,
-            scaleY: uniformScale / sy
-        });
+        if (t.name === 'blockTag') {
+            // Cancel out the group's own (possibly non-uniform) scale on the text, then
+            // set a fontSize computed directly against the block's current real size —
+            // this keeps the tag crisp and correctly proportioned, however small/large the block is.
+            t.set({
+                scaleX: 1 / sx,
+                scaleY: 1 / sy,
+                fontSize,
+                clipPath: clipRect,
+                text: tagText || t.text
+            });
+        } else {
+            // Other text children (e.g. lock icon): just undo the skew, keep their own size
+            const desiredMin = Math.min(currentPxWidth, currentPxHeight);
+            const originalMin = Math.min(rect.width, rect.height);
+            const uniformScale = desiredMin / (originalMin || 1);
+            t.set({ scaleX: uniformScale / sx, scaleY: uniformScale / sy });
+        }
     });
 }
 
@@ -1648,7 +1817,9 @@ function enterGroupEditMode() {
 
     state.canvas.renderAll();
     updateUI();
-    updateSelectedObjectControls(null);
+    // Pass a sentinel so updateSelectedObjectControls enters the isEditingGroup branch
+    // and shows the ✓ Finish Editing button (not the null/hide-all branch).
+    updateSelectedObjectControls({});
 }
 function exitGroupEditMode() {
     if (!window.isEditingGroup || !window.groupBeingEdited) return;
@@ -1677,6 +1848,7 @@ function exitGroupEditMode() {
     state.canvas.setActiveObject(newGroup);
     state.canvas.renderAll();
     updateUI();
+    updateSelectedObjectControls(newGroup);
 }
 export function handleCategoryChange(e) {
     const newCategory = e.target.value;
@@ -1850,6 +2022,11 @@ export function enterMode(mode, data = null) {
     if (mode === 'placingCompositeBlock') selectedCompositeBlockData = data;
     if (mode === 'drawingParkingOnEdge') {
         document.getElementById('status-bar').textContent = 'Select a building edge on a valid level (Basement, Ground, Podium) to place parking.';
+    }
+    if (mode === 'placingBlock') {
+        const selectedCount = document.getElementById('serviceBlockType')?.selectedOptions.length || 0;
+        document.getElementById('status-bar').textContent =
+            `Click on the canvas to place ${selectedCount} selected block(s) on level "${state.currentLevel.replace(/_/g, ' ')}".`;
     }
     if (mode === 'editingSetback') document.getElementById('individual-setback-controls').style.display = 'block';
     if (mode === 'aligningObject') {
@@ -2140,3 +2317,314 @@ export function handleFinishPolyline(shape, modeOverride = null) {
         exitAllModes();
     }
 }
+
+// ============================================================
+// Feature 2 – Link imported geometry to a service block
+// ============================================================
+
+/**
+ * When a service block AND one or more geometry objects are selected together,
+ * this function tags each geometry object with linkedBlockId = block.blockId.
+ * This makes the geometry visible whenever the block is visible and clickable
+ * from the service block list.
+ */
+window.linkSelectedGeometryToBlock = function () {
+    const activeObj = state.canvas.getActiveObject();
+    if (!activeObj) {
+        document.getElementById('status-bar').textContent = 'Select a service block and geometry object(s) together, then link.';
+        return;
+    }
+
+    // Collect objects – support both single MultiSelection and individual objects
+    const objects = activeObj.type === 'activeSelection'
+        ? activeObj.getObjects()
+        : [activeObj];
+
+    const block = objects.find(o => o.isServiceBlock);
+    const geometries = objects.filter(o => o.isImportedGeometry || o.isGeometryGroup);
+
+    if (!block) {
+        document.getElementById('status-bar').textContent = 'No service block found in selection. Select both a service block and geometry.';
+        return;
+    }
+    if (geometries.length === 0) {
+        document.getElementById('status-bar').textContent = 'No imported geometry found in selection.';
+        return;
+    }
+
+    geometries.forEach(geo => {
+        geo.linkedBlockId = block.blockId;
+        // Also mark sub-objects if it is a geometry group
+        if (geo.isGeometryGroup && geo.getObjects) {
+            geo.getObjects().forEach(sub => { sub.linkedBlockId = block.blockId; });
+        }
+    });
+
+    state.canvas.renderAll();
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent =
+        `✓ Linked ${geometries.length} geometry object(s) to block "${block.blockId}".`;
+};
+
+// ============================================================
+// Feature 3 – Group / Explode imported geometry objects
+// ============================================================
+
+/**
+ * Groups all selected isImportedGeometry objects into a single Fabric.js Group
+ * with isGeometryGroup: true so they can be managed together.
+ */
+window.groupGeometry = function () {
+    const activeObj = state.canvas.getActiveObject();
+    if (!activeObj || activeObj.type !== 'activeSelection') {
+        document.getElementById('status-bar').textContent = 'Select multiple geometry objects first (shift-click), then group.';
+        return;
+    }
+
+    const geoObjects = activeObj.getObjects().filter(o => o.isImportedGeometry || o.isGeometryGroup);
+    if (geoObjects.length < 2) {
+        document.getElementById('status-bar').textContent = 'Select at least 2 imported geometry objects to group.';
+        return;
+    }
+
+    const groupName = prompt('Name for this geometry group (optional):', '') || '';
+
+    // Preserve world-space coordinates before ungrouping from active selection
+    const matrix = activeObj.calcTransformMatrix ? activeObj.calcTransformMatrix() : null;
+
+    geoObjects.forEach(obj => state.canvas.remove(obj));
+
+    const newGroup = new fabric.Group(geoObjects, {
+        isGeometryGroup: true,
+        geometryGroupName: groupName,
+        selectable: true,
+        evented: true,
+        subTargetCheck: false,
+        strokeUniform: true,
+        objectCaching: false
+    });
+
+    state.canvas.discardActiveObject();
+    state.canvas.add(newGroup);
+    state.canvas.setActiveObject(newGroup);
+    state.canvas.renderAll();
+
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent =
+        `✓ Grouped ${geoObjects.length} geometry objects${groupName ? ` as "${groupName}"` : ''}.`;
+    updateSelectedObjectControls(newGroup);
+};
+
+/**
+ * Explodes (ungroups) a selected isGeometryGroup back into individual objects
+ * on the canvas, preserving their world-space positions.
+ */
+window.explodeGeometryGroup = function () {
+    const activeObj = state.canvas.getActiveObject();
+    if (!activeObj || !activeObj.isGeometryGroup) {
+        document.getElementById('status-bar').textContent = 'Select a geometry group to explode.';
+        return;
+    }
+
+    const groupMatrix = activeObj.calcTransformMatrix();
+    const children = activeObj.getObjects();
+
+    // Remove the group first
+    state.canvas.remove(activeObj);
+    state.canvas.discardActiveObject();
+
+    const restoredObjects = [];
+    children.forEach(child => {
+        // Apply group transform to each child to get world-space position
+        const childMatrix = child.calcTransformMatrix();
+        const combinedMatrix = fabric.util.multiplyTransformMatrices(groupMatrix, childMatrix);
+        const decomposed = fabric.util.qrDecompose(combinedMatrix);
+
+        child.set({
+            left: decomposed.translateX,
+            top: decomposed.translateY,
+            scaleX: decomposed.scaleX,
+            scaleY: decomposed.scaleY,
+            angle: decomposed.angle,
+            skewX: decomposed.skewX,
+            skewY: decomposed.skewY,
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            evented: true
+        });
+        child.setCoords();
+        state.canvas.add(child);
+        restoredObjects.push(child);
+    });
+
+    // Select all restored objects for convenience
+    if (restoredObjects.length > 0) {
+        const sel = new fabric.ActiveSelection(restoredObjects, { canvas: state.canvas });
+        state.canvas.setActiveObject(sel);
+    }
+    state.canvas.renderAll();
+
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent =
+        `✓ Exploded geometry group into ${children.length} individual objects.`;
+    updateSelectedObjectControls(state.canvas.getActiveObject());
+};
+
+// ============================================================
+// Feature 4 – Group / Ungroup service blocks
+// ============================================================
+
+/**
+ * Groups 2+ selected plain (non-composite) service blocks into a single
+ * isCompositeGroup — the same model used by predefined composite cores, so
+ * everything that already understands composites (list, area calc, labels,
+ * delete, audit) just works on ad-hoc groups too.
+ */
+window.groupServiceBlocks = function () {
+    const activeObj = state.canvas.getActiveObject();
+    if (!activeObj || activeObj.type !== 'activeSelection') {
+        document.getElementById('status-bar').textContent = 'Select multiple service blocks first (shift-click), then click Group Blocks.';
+        return;
+    }
+
+    const selectedItems = activeObj.getObjects();
+    if (selectedItems.some(o => o.isCompositeGroup)) {
+        document.getElementById('status-bar').textContent = 'Your selection includes an existing group — ungroup it first, then group again.';
+        return;
+    }
+
+    const blocks = selectedItems.filter(o => o.isServiceBlock);
+    if (blocks.length < 2) {
+        document.getElementById('status-bar').textContent = 'Select at least 2 service blocks (shift-click) to group.';
+        return;
+    }
+
+    const groupName = prompt('Name for this block group (optional):', '') || 'Block Group';
+    const sharedLevel = blocks[0].level || state.currentLevel;
+
+    // Remove individually from state — they'll live inside the new composite instead
+    state.serviceBlocks = state.serviceBlocks.filter(b => !blocks.includes(b));
+    blocks.forEach(obj => state.canvas.remove(obj));
+
+    const newGroup = new fabric.Group(blocks, {
+        isCompositeGroup: true,
+        compositeDefName: groupName,
+        level: sharedLevel,
+        selectable: true,
+        evented: true,
+        subTargetCheck: false,
+        strokeUniform: true,
+    });
+
+    state.serviceBlocks.push(newGroup);
+    state.canvas.discardActiveObject();
+    state.canvas.add(newGroup);
+    state.canvas.setActiveObject(newGroup);
+    state.canvas.renderAll();
+
+    renderServiceBlockList();
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent =
+        `✓ Grouped ${blocks.length} service blocks as "${groupName}".`;
+    updateSelectedObjectControls(newGroup);
+};
+
+/**
+ * Ungroups a selected composite service-block group back into individual
+ * service blocks on the canvas, preserving their world-space positions.
+ */
+window.ungroupServiceBlocks = function () {
+    const activeObj = state.canvas.getActiveObject();
+    if (!activeObj || !activeObj.isCompositeGroup) {
+        document.getElementById('status-bar').textContent = 'Select a service block group to ungroup.';
+        return;
+    }
+
+    const groupMatrix = activeObj.calcTransformMatrix();
+    const children = activeObj.getObjects().filter(o => o.isServiceBlock);
+    if (children.length === 0) {
+        document.getElementById('status-bar').textContent = 'This group has no service blocks to ungroup.';
+        return;
+    }
+    const groupLevel = activeObj.level;
+
+    // Remove the composite first
+    state.serviceBlocks = state.serviceBlocks.filter(b => b !== activeObj);
+    state.canvas.remove(activeObj);
+    state.canvas.discardActiveObject();
+
+    const restoredBlocks = [];
+    children.forEach(child => {
+        // Apply group transform to each child to get world-space position
+        const childMatrix = child.calcTransformMatrix();
+        const combinedMatrix = fabric.util.multiplyTransformMatrices(groupMatrix, childMatrix);
+        const decomposed = fabric.util.qrDecompose(combinedMatrix);
+
+        child.set({
+            left: decomposed.translateX,
+            top: decomposed.translateY,
+            scaleX: decomposed.scaleX,
+            scaleY: decomposed.scaleY,
+            angle: decomposed.angle,
+            skewX: decomposed.skewX,
+            skewY: decomposed.skewY,
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            evented: true,
+            level: child.level || groupLevel,
+        });
+        child.setCoords();
+        state.canvas.add(child);
+        state.serviceBlocks.push(child);
+        restoredBlocks.push(child);
+    });
+
+    // Select all restored blocks for convenience
+    if (restoredBlocks.length > 0) {
+        const sel = new fabric.ActiveSelection(restoredBlocks, { canvas: state.canvas });
+        state.canvas.setActiveObject(sel);
+    }
+    state.canvas.renderAll();
+
+    renderServiceBlockList();
+    autosaveToLocalStorage();
+    document.getElementById('status-bar').textContent =
+        `✓ Ungrouped into ${restoredBlocks.length} individual service block(s).`;
+    updateSelectedObjectControls(state.canvas.getActiveObject());
+};
+
+// ============================================================
+// Feature 1 – Expose JSON session IO as global window functions
+// ============================================================
+
+window.triggerExportSessionJSON = function () {
+    exportSessionAsJSON();
+};
+
+window.triggerImportSessionJSON = function () {
+    const input = document.getElementById('import-session-json-upload');
+    if (input) input.click();
+};
+
+window.handleImportSessionJSONFile = function (e) {
+    const file = e.target.files[0];
+    if (file) {
+        importSessionFromJSON(file);
+        e.target.value = '';
+    }
+};
+
+// ============================================================
+// Audit Service Block Areas (Feature 2 extension)
+// ============================================================
+
+/**
+ * Audit entry point: opens the interactive Audit Service Blocks modal so the
+ * user can review tags, area, and link status for every placed block, then
+ * choose (via checkboxes) which unlinked blocks to actually delete.
+ */
+window.auditServiceBlockAreas = function () {
+    openAuditServiceBlocksModal();
+};

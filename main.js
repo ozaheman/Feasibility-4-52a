@@ -8,11 +8,11 @@ window.scalePoint1 = null;
 
 window.snapIndicators;
 window.scaleLine = null;
-window.edgeSnapIndicator =null;
+window.edgeSnapIndicator = null;
 window.currentDrawingPolygon = null;
 window.guideLine = null;
-window.overlayCtx=null;
-window.overlayCanvas=null;
+window.overlayCtx = null;
+window.overlayCanvas = null;
 
 window.parkingStartPoint = null;
 window.parkingLine = null;
@@ -22,17 +22,17 @@ window.edgeSnapIndicator = null;
 window.isEditingGroup = false;
 window.groupBeingEdited = null;
 window.snapThreshold = 15; // Pixels for snapping
-window.addDrawingPoint=null;
+window.addDrawingPoint = null;
 window.measurePoint1 = null;
 
 window.finalpolygonPoints = [];
 window.polygonPoints = [];
-window.isPanning =false;
-window.alignmentHighlight=null,
-window.lastPanPoint=null; 
-window.scaleReady=null;
+window.isPanning = false;
+window.alignmentHighlight = null,
+    window.lastPanPoint = null;
+window.scaleReady = null;
 window.currentlyEditingUnitKey = null;
-window.tempUnitData= null;
+window.tempUnitData = null;
 window.inputs = {};
 import { initCanvas, getCanvas } from './canvasController.js';
 import { initUI, updateUI } from './uiController.js';
@@ -42,6 +42,7 @@ import { setupEventListeners } from './eventHandlers.js';
 import { resetState, state } from './state.js';
 import { loadFromAutosave, autosaveToLocalStorage } from './io.js';
 import { initCompositePreview } from './dyn_composite_block.js';
+import { startAutoSave } from './stateScripting.js';
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -67,6 +68,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(() => {
         autosaveToLocalStorage();
     }, 10000);
+
+    // NEW: Set up State Scripting Auto-Save
+    startAutoSave();
 
     // Set up rolling autosave every 5 minutes (5 iterations max)
     setInterval(() => {
